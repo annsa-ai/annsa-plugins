@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "annsa": {
+      "type": "http",
+      "url": "https://app.annsa.ai/mcp"
+    }
+  }
+}

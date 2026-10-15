@@ -1,0 +1,16 @@
+{
+  "name": "annsa-plugins",
+  "owner": { "name": "Annsa", "url": "https://annsa.ai" },
+  "metadata": { "description": "Annsa is the source of direction for your agents." },
+  "plugins": [
+    {
+      "name": "annsa",
+      "source": "./",
+      "description": "Annsa is the source of direction for your agents.",
+      "version": "0.1.0",
+      "homepage": "https://annsa.ai",
+      "license": "MIT",
+      "category": "Productivity"
+    }
+  ]
+}

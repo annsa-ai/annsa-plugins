@@ -1,0 +1,12 @@
+{
+  "name": "annsa-plugins",
+  "interface": { "displayName": "Annsa Plugins" },
+  "plugins": [
+    {
+      "name": "annsa",
+      "source": { "source": "local", "path": "./" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Productivity"
+    }
+  ]
+}

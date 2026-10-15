@@ -1,0 +1,11 @@
+{
+  "name": "annsa",
+  "version": "0.1.0",
+  "description": "Annsa is the source of direction for your agents.",
+  "author": { "name": "Annsa", "url": "https://annsa.ai" },
+  "homepage": "https://annsa.ai",
+  "license": "MIT",
+  "keywords": ["annsa", "priorities", "specs", "product direction", "mcp"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}
