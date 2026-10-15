@@ -2,43 +2,57 @@
 name: annsa-decisions
 description: >
   The loop for a question only a person can answer: raise it as a three-line
-  ask with `annsa.act escalate`, read the answer back on `annsa.spec`, answer a
+  ask with `annsa.work escalate`, read the answer back on `annsa.spec`, answer a
   question a person sends back, apply the decision to the spec. Use when a
   question changes scope, affects customers/revenue/security/irreversible data,
   contradicts a principle, or needs a choice between legitimate options. Not for
   anything you can settle from existing direction. Generated — do not edit
   by hand.
+version: 1.1.0
+updated: 2026-10-15
 ---
 
 # Decisions
 
+If your saved copy's version is older, replace it.
+
 An ask puts a priority in a person's **Needs you** queue. It costs their
 attention, so it is rare, it has a shape so it can be answered in one line, and
-the answer comes back to you as direction. Really simple language. No essays.
+the answer comes back to you as direction.
 
 **Who decides:** a person answers; you raise, read and apply. You cannot clear
 your own ask, and one priority carries one open ask at a time. A person answers
-from the board, or from their own terminal with `annsa.act answer` (and asks
-you something back with `annsa.act ask_back`).
+from the board, or from their own terminal with `annsa.decide answer` (and asks
+you something back with `annsa.decide ask_back`).
 
 **When the person is in your terminal (#796):** ask them, then relay their
-exact words: `annsa.act answer priority_number=N person_words="<their words>"
+exact words: `annsa.decide answer priority_number=N person_words="<their words>"
 person=<their email>`. It is recorded as their answer, via your seat, on this
-priority only. The same works for `annsa.act severity`: their P, typed as theirs.
+priority only. The same works for `annsa.board severity`: their P, typed as theirs.
 Never answer in your own words, never name someone who is not a member, and
 `ask_back` and `sign` stay theirs. If the workspace answers in the app only,
 the door says so: hand them the `url` instead.
+
+**Proposing a principle** (`annsa.decide principle op=propose`):
+
+- A principle is one decision that settles a recurring question.
+- Title: what is true, in nine words or fewer, in words a customer or builder would use.
+- Body: the rule in one or two sentences; name when it applies and when it doesn't, and give one concrete example if it helps.
+- No essays, no mechanism tour, no AI cadence.
+- It must be testable: an agent can tell whether an ask falls under it.
+- Scope it as narrowly as it's true.
+- For example: "CI never holds a prod credential that reads customers".
 
 ## Raise
 
 **When**
 
-- [ ] It is one of the four triggers. If not, it is a note — `annsa.act note` and carry on.
+- [ ] It is one of the four triggers. If not, it is a note — `annsa.work note` and carry on.
   - **scope** — Changes scope or intended outcome
   - **customers** — Affects customers, revenue, security or irreversible data
   - **principle** — Contradicts a principle
   - **options** — Requires choosing between legitimate product options
-- [ ] Nothing on the spec already settles it. `annsa.spec` first — an answered `decision` there is direction, not a question.
+- [ ] Nothing on the spec already settles it: an answered `decision` there is direction.
 - [ ] No ask is already open on the row (`decision.state == "open"`). A person answers one question at a time.
 
 **The shape**
@@ -53,7 +67,7 @@ Three questions, in order:
 - `kind` — decision | help | gap | update
 - `ask` — the ask itself, one line
 - `options` — short labels, only for a decision — "A - human only", "B - agent and human" *(optional)*
-- `recommend` — which option you'd take, by its letter — optional
+- `recommend` — which option you'd take, by its letter — required on a decision *(optional)*
 - `principle` — the rule that would let an agent settle this next time — it invites the rule, not a sentence about the agent
 
 An example — this is the register:
@@ -68,7 +82,7 @@ Principle - product decision
 **The call**
 
 ```
-annsa.act escalate
+annsa.work escalate
   priority_number: <#0NN>
   trigger:   options
   topic:     "Needs-you flag"
@@ -83,14 +97,13 @@ annsa.act escalate
 
 - [ ] The priority shows in **Needs you** on the board and the ask sits above the brief until a person answers.
 - [ ] Raising does not block you. Carry on with anything that does not depend on the answer.
-- [ ] The reply carries `url`: hand that link to the person instead of naming the priority. It opens the sheet on the open decision, options ready to tap. `annsa.spec` carries the same `url` on an open `decision`, and `annsa.priorities mine=true` on a `needs_me` question back.
+- [ ] The reply carries `url`: hand that link to the person instead of naming the priority. It opens the decision, options ready to tap; `annsa.spec` carries it too.
 - [ ] If the door refuses the shape, the reply shows the shape and an example — fix and resend.
 
 **What not to do**
 
 - Do not narrate. A topic is a line; an option is a label; a principle is a rule, not a paragraph.
 - Do not raise a second topic on a row with an open ask — wait, or fold it into the open one.
-- Do not raise what you can settle from the spec, a note, or a principle already written.
 
 ## Read back
 
@@ -100,7 +113,7 @@ annsa.act escalate
 
 **The shape**
 
-`decision` is absent when nothing was ever asked — like `updates`, which is absent when none are pending; read both keys, an absent key means nothing to do. Otherwise:
+`decision` is absent when nothing was ever asked. Otherwise:
 
 - `state: open` — `ask`, `lines`, `since`, and `question_back` if a person asked you something.
 - `state: answered` — `answer`, `option`, `answered_at`, `topic`, `principle`, and the `ask` it settled. `relay` is set when an agent carried the person's words: `name`, `via`, `quote`.
@@ -117,10 +130,10 @@ The same record is a note on the priority, titled by kind — decision: *Decisio
 
 **What happens next**
 
-- [ ] `answered` on any reply → a person answered your ask: apply it now. On `claim`, read `principles` and `related_answers` before you ask.
+- [ ] `answered` on any reply → a person answered your ask: apply it now.
 - [ ] `answered_at` after your last note → the direction changed while you were away. Apply it (below) before anything else.
 - [ ] `question_back` set → answer it (below).
-- [ ] `state: open` and it is your ask → carry on with what does not depend on it.
+- [ ] "Do not proceed" is an answer, not an error. Apply it like any other.
 
 **What not to do**
 
@@ -140,14 +153,14 @@ The same three-line ask, rewritten with what they asked for — the **same topic
 **The call**
 
 ```
-annsa.act escalate          # same topic → updates the open ask
+annsa.work escalate          # same topic → updates the open ask
   priority_number: <#0NN>
   topic:     "Needs-you flag"   # unchanged
   ask:       "<the ask, with what they asked for>"
   ...
 ```
 
-If what they asked for is context that does not change the ask, `annsa.act note` it and leave the ask as it is.
+If what they asked for is context that does not change the ask, `annsa.work note` it and leave the ask as it is.
 
 **What happens next**
 
@@ -171,12 +184,16 @@ The section as it stands, plus one line quoting the decision: *"Decision (12 Sep
 **The call**
 
 - [ ] `annsa.spec priority_number=N` — copy the section's current text.
-- [ ] Your section (you hold the priority): `annsa.act write section=what_to_build text="<current text, then a blank line, then> Decision (<date>): <option> — <their words>. Principle: <principle>"`.
+- [ ] Your section (you hold the priority): `annsa.work write section=what_to_build text="<current text, then a blank line, then> Decision (<date>): <option> — <their words>. Principle: <principle>"`.
 - [ ] Someone else's section, or you do not hold it: the same `write` — the door refuses it and records your text as an **update** on that section; `reason` on the update is why it was refused. Nothing is lost.
-- [ ] Then `annsa.act note text="Applied: <topic> → <option>. Changed: <section>."` — one line.
+- [ ] Then `annsa.work note text="Applied: <topic> → <option>. Changed: <section>."` — one line.
 
 **What not to do**
 
-- Do not send the decision line alone. `write` replaces the whole section; the rest of the direction would be gone.
 - Do not paraphrase the answer. Quote it.
 - Do not mark anything shipped because a decision was made. Shipped means merged and checked.
+
+## Changes
+
+- 1.1.0 (2026-10-15): A decision names the option you'd take: escalate refuses one without recommend.
+- 1.0.0 (2026-10-14): Versioned.

@@ -1,15 +1,11 @@
-# Source
+# Where these skills come from
 
-These skills are copied unchanged from the published index:
+These are copies of Annsa's generated skills, taken from the annsa-ai/Annsa repo (`.claude/skills/<name>/SKILL.md`). They match what `annsa.ask topic=<topic>` serves on app.annsa.ai and the hashes in `backend/scripts/skill_versions.lock.json`.
 
-https://annsa.ai/.well-known/agent-skills/index.json
+| Skill | Version | sha256 |
+|---|---|---|
+| annsa-working | 5.5.0 | 3c66fd38cc390a9d2484986e3bb7e0ce82be7223e2b4531ceccf9a222ed2e23c |
+| annsa-spec | 1.0.0 | a696477e8a96a3d0ebccf53cd0a010def770a74b65ca22b3585c48d33304e96a |
+| annsa-decisions | 1.1.0 | 391d58c5577bbb36692310821f72bb2ce02f1df1eeb4a5b671038f2e65abed41 |
 
-Fetched 2026-10-16. Each SKILL.md was downloaded from its `url` (relative to https://annsa.ai) and its sha256 matched the index digest.
-
-| Skill | sha256 |
-| --- | --- |
-| annsa-working | c843be2a13eaf92d82dce4b092c19551683de02dcf2cc3046009c34ab34cefa3 |
-| annsa-spec | 4e55a7f4437276a4db60f30b5e665a8ef0a99f3ae0c0fdfca7490f3538b01a22 |
-| annsa-decisions | d1244c9ccef42b6202cad0ef094fe9ee0fa6f11b667b930b67a00f3d25b8b51d |
-
-To refresh, re-fetch the index, re-download, and check the digests again. Do not edit these files by hand.
+Fetched 2026-10-16. Don't edit these by hand; recopy them when a version changes.

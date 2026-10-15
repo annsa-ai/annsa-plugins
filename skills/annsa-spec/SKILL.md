@@ -5,9 +5,13 @@ description: >
   need to write its sections from the evidence annsa.spec returns; when a
   write is refused; or when a spec carries updates to approve. Generated — do
   not edit by hand.
+version: 1.0.0
+updated: 2026-10-14
 ---
 
 # Writing a spec
+
+If your saved copy's version is older, replace it.
 
 A spec has five sections and starts with all five empty. Annsa supplies the evidence; you write every section.
 
@@ -64,7 +68,7 @@ The door nudges when a section runs past 120 words or reads like AI; the text la
 
 **When**
 
-- [ ] You hold the priority: `annsa.act claim priority_number=N label="<your session>"`. Send `label` once, on your first call of the session; the seat sticks (`who.actor.seat` confirms it).
+- [ ] You hold the priority: `annsa.work claim priority_number=N label="<your session>"`. Send `label` once, on your first call of the session; the seat sticks (`who.actor.seat` confirms it).
 - [ ] Claim BEFORE you touch code — before the branch, before the first edit. Claiming mints the spec if there is none, so there is nothing to build first; until you claim, the board shows nobody on the work.
 - [ ] You have read the whole spec first: `annsa.spec priority_number=N` — its `evidence`, and `updates` if it carries any.
 - [ ] Read `learned` on claim before you start; it's what earlier agents found out.
@@ -82,11 +86,11 @@ The door nudges when a section runs past 120 words or reads like AI; the text la
 
 **The call**
 
-- [ ] `annsa.act write section=the_problem text="…"` — The single problem being solved. Observable and solution-free.
-- [ ] `annsa.act write section=signals_and_direction text="…"` — The evidence-backed reading of the rows, by kind: people and paying customers are evidence, findings are what is broken, ideas are proposals.
-- [ ] `annsa.act write section=what_to_build text="…"` — The current direction to the agent. Changes here create a material spec version.
-- [ ] `annsa.act write section=files_to_touch text="…"` — Verified paths when known; otherwise named code areas explicitly marked unverified.
-- [ ] `annsa.act write section=done_when text="…"` — Given a state, when an act, then an observable — one line each, individually verifiable. Each line can receive its own receipt, so the lines must not be reworded once receipts point at them.
+- [ ] `annsa.work write section=the_problem text="…"` — The single problem being solved. Observable and solution-free.
+- [ ] `annsa.work write section=signals_and_direction text="…"` — The evidence-backed reading of the rows, by kind: people and paying customers are evidence, findings are what is broken, ideas are proposals.
+- [ ] `annsa.work write section=what_to_build text="…"` — The current direction to the agent. Changes here create a material spec version.
+- [ ] `annsa.work write section=files_to_touch text="…"` — Verified paths when known; otherwise named code areas explicitly marked unverified.
+- [ ] `annsa.work write section=done_when text="…"` — Given a state, when an act, then an observable — one line each, individually verifiable. Each line can receive its own receipt, so the lines must not be reworded once receipts point at them.
 
 No quotes on the priority — a dogfood row, or a row a reviewer filed from a PR? Then the finding IS your evidence.
 
@@ -138,7 +142,7 @@ Each update: `id`, `section`, `reason`, `proposed_text`, `previous_text`, `propo
 
 **The call**
 
-- [ ] If you are the section's author right now (you hold it, and it is yours to write): `annsa.act approve update_id=<id>` or `annsa.act dismiss update_id=<id>`.
+- [ ] If you are the section's author right now (you hold it, and it is yours to write): `annsa.decide approve update_id=<id>` or `annsa.decide dismiss update_id=<id>`.
 
 **What happens next**
 
@@ -155,13 +159,17 @@ Each update: `id`, `section`, `reason`, `proposed_text`, `previous_text`, `propo
 
 **The call**
 
-- [ ] `annsa.act note text="…"` — what you did, what is next, in your own words.
-- [ ] `annsa.act release reason="…"` — if you are not finishing.
-- [ ] A reviewer's finding that is NOT a bug? `annsa.act release reason="not a bug: <why>" verdict=false_positive` — your reason becomes a note and a person is asked to dismiss. Never close a finding yourself; a false positive is a claim too.
-- [ ] `annsa.act ship` only after the agreed checks pass.
+- [ ] `annsa.work note text="…"` — what you did, what is next, in your own words.
+- [ ] `annsa.work release reason="…"` — if you are not finishing.
+- [ ] A reviewer's finding that is NOT a bug? `annsa.work release reason="not a bug: <why>" verdict=false_positive` — your reason becomes a note and a person is asked to dismiss. Never close a finding yourself; a false positive is a claim too.
+- [ ] `annsa.work ship` only after the agreed checks pass.
 - [ ] `learned="…"` on that ship: what you found out building it, in a sentence or two. It lands as an idea on the same priority, for the next spec written there. Nudged, not required.
 
 **What not to do**
 
 - Do not leave a seat you are not in. Release it.
 - Do not call it shipped because you are done. Shipped means merged and checked.
+
+## Changes
+
+- 1.0.0 (2026-10-14): Versioned.
