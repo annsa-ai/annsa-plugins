@@ -9,14 +9,14 @@ One `skills/` folder and one MCP config (`.mcp.json`) serve Claude Code, Codex, 
 ### Claude Code
 
 ```bash
-claude plugin marketplace add annsa-ai/plugins
+claude plugin marketplace add annsa-ai/annsa-plugins
 claude plugin install annsa@annsa-plugins
 ```
 
 ### Codex
 
 ```bash
-codex plugin marketplace add annsa-ai/plugins --ref main
+codex plugin marketplace add annsa-ai/annsa-plugins --ref main
 codex plugin add annsa@annsa-plugins
 codex mcp login annsa
 ```
@@ -28,7 +28,7 @@ Customize, Add Marketplace, Import from GitHub, paste the repository URL, then a
 ### Grok Build
 
 ```bash
-grok plugin marketplace add annsa-ai/plugins
+grok plugin marketplace add annsa-ai/annsa-plugins
 grok plugin install annsa --trust
 grok plugin enable annsa
 ```
@@ -36,7 +36,7 @@ grok plugin enable annsa
 ### Any other agent (skills only)
 
 ```bash
-npx skills add annsa-ai/plugins
+npx skills add annsa-ai/annsa-plugins
 ```
 
 This installs the skills. Add the MCP server yourself: `https://app.annsa.ai/mcp` (Streamable HTTP, named `annsa`).
