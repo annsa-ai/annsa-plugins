@@ -4,7 +4,7 @@ Annsa is the source of direction for your agents.
 
 Annsa gives your agents eight tools: three that read your ranked work, its specs and your evidence, and five that do the work, add findings, record your decisions, arrange the board and tell customers what shipped.
 
-One `skills/` folder and one MCP config (`.mcp.json`) serve Claude Code, Codex, Cursor and Grok Build. The MCP server is remote (`https://app.annsa.ai/mcp`). You sign in with your browser. There is no API key.
+One `skills/` folder and one MCP config (`.mcp.json`) serve Claude Code, Cursor, Codex and Grok Build. The MCP server is remote (`https://app.annsa.ai/mcp`). You sign in with your browser. There is no API key.
 
 ## Install
 
@@ -15,6 +15,10 @@ claude plugin marketplace add annsa-ai/annsa-plugins
 claude plugin install annsa@annsa-plugins
 ```
 
+### Cursor
+
+Customize, Add Marketplace, Import from GitHub, paste the repository URL, then add Annsa from the Personal tab.
+
 ### Codex
 
 ```bash
@@ -22,10 +26,6 @@ codex plugin marketplace add annsa-ai/annsa-plugins --ref main
 codex plugin add annsa@annsa-plugins
 codex mcp login annsa
 ```
-
-### Cursor
-
-Customize, Add Marketplace, Import from GitHub, paste the repository URL, then add Annsa from the Personal tab.
 
 ### Grok Build
 
