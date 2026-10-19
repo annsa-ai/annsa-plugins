@@ -1,12 +1,12 @@
 {
   "name": "annsa-plugins",
   "owner": { "name": "Annsa", "url": "https://annsa.ai" },
-  "metadata": { "description": "Annsa is the source of direction for your agents." },
+  "metadata": { "description": "AI agent management for product builders. The source of direction for your agents: choose what to build, direct every agent and learn as you go." },
   "plugins": [
     {
       "name": "annsa",
       "source": "./",
-      "description": "Annsa is the source of direction for your agents.",
+      "description": "AI agent management for product builders. The source of direction for your agents: choose what to build, direct every agent and learn as you go.",
       "version": "0.1.0",
       "homepage": "https://annsa.ai",
       "license": "MIT",

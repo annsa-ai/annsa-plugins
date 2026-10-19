@@ -6,8 +6,8 @@ description: >
   recover when a call fails. Use at the start of any session that reads
   or writes Annsa, and when a call is refused or times out. Generated;
   do not edit by hand.
-version: 5.5.0
-updated: 2026-10-15
+version: 5.6.0
+updated: 2026-10-19
 ---
 
 # Working with Annsa
@@ -65,7 +65,7 @@ Settle anything else yourself and carry on. Before you escalate, ask `annsa.ask`
 - **An idea or a finding.** An idea is something that could be better: `annsa.file submit stand_alone=true signal_class=idea`. A finding is something you saw break or fall short: `signal_class=agent`, or `dogfood` when you hit it using the product. `adopt_priority` is the old name for submit stand_alone.
 - **Every finding** carries `severity` (P0–P3), a one-line `severity_reason` and `root_cause`. One without a severity sits at the bottom of the board.
 - `with_spec=true` mints a spec too: for a detail that already holds the evidence and a direction, not for a bare title.
-- **Proposals land Unplaced.** A person places them on a bet. A goal is a bet, and a person creates it: propose a goal in words.
+- **Proposals land Unplaced unless you name a bet.** Send `bet` (its title or id) with stand_alone to put a new priority on it; it stays proposed until a person signs or moves it. A goal is a bet, and a person creates it: propose a goal in words.
 
 **"Look at this project and propose work."** Read the code and the person's recent work. List at most five, each checked with `do_we_have`, and file only the ones the person says yes to, as an idea or a finding. Tell the person they wait in `annsa.priorities bet=unplaced` until they place them.
 
@@ -100,6 +100,6 @@ Merged is not deployed, deployed is not verified, verified is not confirmed by t
 
 ## Changes
 
+- 5.6.0 (2026-10-19): Name a bet with stand_alone to put a new priority on it.
 - 5.5.0 (2026-10-15): Check annsa.ask before escalating; escalate only what it leaves open.
 - 5.4.0 (2026-10-15): Write Done When before you open the PR.
-- 5.3.0 (2026-10-14): Customer revenue or personal data is a reason to escalate; carry on safely while you wait.

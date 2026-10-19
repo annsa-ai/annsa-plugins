@@ -1,11 +1,11 @@
 {
   "name": "annsa-plugins",
-  "description": "Annsa is the source of direction for your agents.",
+  "description": "AI agent management for product builders. The source of direction for your agents: choose what to build, direct every agent and learn as you go.",
   "owner": { "name": "Annsa" },
   "plugins": [
     {
       "name": "annsa",
-      "description": "Annsa is the source of direction for your agents.",
+      "description": "AI agent management for product builders. The source of direction for your agents: choose what to build, direct every agent and learn as you go.",
       "category": "productivity",
       "version": "0.1.0",
       "source": { "type": "local", "path": "./" },

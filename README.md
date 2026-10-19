@@ -1,6 +1,6 @@
 # Annsa plugins
 
-Annsa is the source of direction for your agents.
+Annsa is AI agent management for product builders. The source of direction for your agents: choose what to build, direct every agent and learn as you go.
 
 Annsa gives your agents eight tools: three that read your ranked work, its specs and your evidence, and five that do the work, add findings, record your decisions, arrange the board and tell customers what shipped.
 

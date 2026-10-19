@@ -1,7 +1,7 @@
 {
   "name": "annsa",
   "version": "0.1.0",
-  "description": "Annsa is the source of direction for your agents.",
+  "description": "AI agent management for product builders. The source of direction for your agents: choose what to build, direct every agent and learn as you go.",
   "author": { "name": "Annsa", "url": "https://annsa.ai" },
   "homepage": "https://annsa.ai",
   "license": "MIT",
@@ -10,7 +10,7 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Annsa",
-    "shortDescription": "Annsa is the source of direction for your agents.",
+    "shortDescription": "AI agent management for product builders. The source of direction for your agents: choose what to build, direct every agent and learn as you go.",
     "developerName": "Annsa",
     "category": "Productivity",
     "websiteURL": "https://annsa.ai",
