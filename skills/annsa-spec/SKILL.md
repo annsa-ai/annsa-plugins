@@ -5,8 +5,8 @@ description: >
   need to write its sections from the evidence annsa.spec returns; when a
   write is refused; or when a spec carries updates to approve. Generated — do
   not edit by hand.
-version: 1.0.0
-updated: 2026-10-14
+version: 1.2.0
+updated: 2026-10-25
 ---
 
 # Writing a spec
@@ -18,12 +18,12 @@ A spec has five sections and starts with all five empty. Annsa supplies the evid
 | Section | Who writes it | What it is |
 |---|---|---|
 | Problem | the holder, a person | The single problem being solved. Observable and solution-free. |
-| Signals and direction | the holder, a person | The evidence-backed reading of the rows, by kind: people and paying customers are evidence, findings are what is broken, ideas are proposals. |
+| Evidence and direction | the holder, a person | The evidence-backed reading of the rows, by kind: people and paying customers are evidence, findings are what is broken, ideas are proposals. |
 | What to build | the holder, a person | The current direction to the agent. Changes here create a material spec version. |
 | Files to touch | the holder, a person | Verified paths when known; otherwise named code areas explicitly marked unverified. |
 | Done When | the holder, a person | Given a state, when an act, then an observable — one line each, individually verifiable. Each line can receive its own receipt, so the lines must not be reworded once receipts point at them. |
 
-**Who decides:** you write Problem, Signals and direction, What to build, Files to touch, Done When while you hold the priority. Annsa writes none of them: `annsa.spec` returns the priority's `evidence` as data (each quote with its person, company, revenue band, source and date), and you write from it. Write what the evidence says, never what you imagine. A person can write anywhere, and a person's words are never overwritten.
+**Who decides:** you write Problem, Evidence and direction, What to build, Files to touch, Done When while you hold the priority. Annsa writes none of them: `annsa.spec` returns the priority's `evidence` as data (each quote with its person, company, revenue band, source and date), and you write from it. Write what the evidence says, never what you imagine. A person can write anywhere, and a person's words are never overwritten.
 
 ## Naming a priority
 
@@ -76,18 +76,18 @@ The door nudges when a section runs past 120 words or reads like AI; the text la
 **The shape**
 
 - Problem: yours. Observable and solution-free: what the person experiences, not what to build.
-- Signals and direction: yours. The reading of the rows by kind; with no quotes it opens with No evidence found. and says what you observed after it.
+- Evidence and direction: yours. The reading of the rows by kind; with no quotes it opens with No evidence found. and says what you observed after it.
 - What to build: yours. Opens with the outcome, then the direction. Never the placeholder.
 - Files to touch: yours. One path per line, verified in the repo and marked (new|modify), or the word Unverified.
 - Done When: yours. One line each: Given a state, when an act, then an observable. A test, a URL or a person can check it.
 - `write` replaces the whole section. To add a line, send the section as it stands with the line added.
 - Files to touch lines are `path (new|modify)`, or carry the word Unverified. Never guess a path.
-- With no quotes on the priority, Signals and direction opens with No evidence found. and says what you observed after it.
+- With no quotes on the priority, Evidence and direction opens with No evidence found. and says what you observed after it.
 
 **The call**
 
 - [ ] `annsa.work write section=the_problem text="…"` — The single problem being solved. Observable and solution-free.
-- [ ] `annsa.work write section=signals_and_direction text="…"` — The evidence-backed reading of the rows, by kind: people and paying customers are evidence, findings are what is broken, ideas are proposals.
+- [ ] `annsa.work write section=evidence_and_direction text="…"` — The evidence-backed reading of the rows, by kind: people and paying customers are evidence, findings are what is broken, ideas are proposals.
 - [ ] `annsa.work write section=what_to_build text="…"` — The current direction to the agent. Changes here create a material spec version.
 - [ ] `annsa.work write section=files_to_touch text="…"` — Verified paths when known; otherwise named code areas explicitly marked unverified.
 - [ ] `annsa.work write section=done_when text="…"` — Given a state, when an act, then an observable — one line each, individually verifiable. Each line can receive its own receipt, so the lines must not be reworded once receipts point at them.
@@ -104,7 +104,7 @@ No quotes on the priority — a dogfood row, or a row a reviewer filed from a PR
 
 - Do not take over a seat someone holds. `note` what you found, or ask them to `handoff`.
 - Do not send one line to a section that has more. `write` replaces the whole section.
-- Do not write what you imagine. No quotes means Signals and direction opens with the words `No evidence found.` and says what you observed after it.
+- Do not write what you imagine. No quotes means Evidence and direction opens with the words `No evidence found.` and says what you observed after it.
 
 ## When a write is refused
 
@@ -160,16 +160,18 @@ Each update: `id`, `section`, `reason`, `proposed_text`, `previous_text`, `propo
 **The call**
 
 - [ ] `annsa.work note text="…"` — what you did, what is next, in your own words.
-- [ ] `annsa.work release reason="…"` — if you are not finishing.
-- [ ] A reviewer's finding that is NOT a bug? `annsa.work release reason="not a bug: <why>" verdict=false_positive` — your reason becomes a note and a person is asked to dismiss. Never close a finding yourself; a false positive is a claim too.
+- [ ] `annsa.work unclaim reason="…"` — if you are not finishing.
+- [ ] A reviewer's finding that is NOT a bug? `annsa.work unclaim reason="not a bug: <why>" verdict=false_positive` — your reason becomes a note and a person is asked to dismiss. Never close a finding yourself; a false positive is a claim too.
 - [ ] `annsa.work ship` only after the agreed checks pass.
 - [ ] `learned="…"` on that ship: what you found out building it, in a sentence or two. It lands as an idea on the same priority, for the next spec written there. Nudged, not required.
 
 **What not to do**
 
-- Do not leave a seat you are not in. Release it.
+- Do not leave a seat you are not in. Unclaim it.
 - Do not call it shipped because you are done. Shipped means merged and checked.
 
 ## Changes
 
+- 1.2.0 (2026-10-25): The section is Evidence and direction again; signals_and_direction is refused.
+- 1.1.0 (2026-10-25): unclaim replaces release; release is refused with the new name.
 - 1.0.0 (2026-10-14): Versioned.
