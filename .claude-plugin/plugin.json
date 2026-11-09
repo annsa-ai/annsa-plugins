@@ -1,11 +1,11 @@
 {
   "name": "annsa",
-  "version": "0.1.0",
-  "description": "AI agent management for product builders. The source of direction for your agents: choose what to build, direct every agent and learn as you go.",
+  "version": "1.0.7",
+  "description": "The plan your AI agents work from. Project management and customer feedback software for founders and small teams working with AI agents.",
   "author": { "name": "Annsa", "url": "https://annsa.ai" },
   "homepage": "https://annsa.ai",
   "license": "MIT",
-  "keywords": ["annsa", "priorities", "specs", "product direction", "mcp"],
+  "keywords": ["annsa", "project management", "customer feedback", "ai agents", "priorities", "specs", "mcp"],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json"
 }

@@ -1,13 +1,13 @@
 {
   "name": "annsa-plugins",
-  "description": "AI agent management for product builders. The source of direction for your agents: choose what to build, direct every agent and learn as you go.",
+  "description": "The plan your AI agents work from. Project management and customer feedback software for founders and small teams working with AI agents.",
   "owner": { "name": "Annsa" },
   "plugins": [
     {
       "name": "annsa",
-      "description": "AI agent management for product builders. The source of direction for your agents: choose what to build, direct every agent and learn as you go.",
+      "description": "The plan your AI agents work from. Project management and customer feedback software for founders and small teams working with AI agents.",
       "category": "productivity",
-      "version": "0.1.0",
+      "version": "1.0.7",
       "source": { "type": "local", "path": "./" },
       "homepage": "https://annsa.ai",
       "license": "MIT",
