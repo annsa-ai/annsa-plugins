@@ -1,11 +1,27 @@
 {
   "name": "annsa",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "The plan your AI agents work from. Project management and customer feedback software for founders and small teams working with AI agents.",
-  "author": { "name": "Annsa", "url": "https://annsa.ai" },
+  "author": {
+    "name": "Annsa",
+    "url": "https://annsa.ai"
+  },
   "homepage": "https://annsa.ai",
+  "repository": "https://github.com/annsa-ai/annsa-plugins",
   "license": "MIT",
-  "keywords": ["annsa", "project management", "customer feedback", "ai agents", "priorities", "specs", "mcp"],
+  "keywords": [
+    "annsa",
+    "project management",
+    "customer feedback",
+    "ai agents",
+    "priorities",
+    "specs",
+    "mcp"
+  ],
+  "icon": "./assets/icon.png",
+  "documentationUrl": "https://annsa.ai/docs",
+  "privacyPolicyUrl": "https://annsa.ai/privacy",
+  "termsOfServiceUrl": "https://annsa.ai/terms",
   "skills": "./skills/",
   "mcpServers": "./.mcp.json"
 }
