@@ -6,10 +6,10 @@ description: >
   question a person sends back, apply the decision to the spec. Use when a
   question changes scope, affects customers/revenue/security/irreversible data,
   contradicts a principle, or needs a choice between legitimate options. Not for
-  anything you can settle from existing direction. Generated — do not edit
+  anything you can resolve from existing direction. Generated — do not edit
   by hand.
-version: 1.1.0
-updated: 2026-10-15
+version: 1.2.0
+updated: 2026-10-25
 ---
 
 # Decisions
@@ -28,7 +28,7 @@ you something back with `annsa.decide ask_back`).
 **When the person is in your terminal (#796):** ask them, then relay their
 exact words: `annsa.decide answer priority_number=N person_words="<their words>"
 person=<their email>`. It is recorded as their answer, via your seat, on this
-priority only. The same works for `annsa.board severity`: their P, typed as theirs.
+priority only. The same works for `annsa.board set_severity`: their P, typed as theirs.
 Never answer in your own words, never name someone who is not a member, and
 `ask_back` and `sign` stay theirs. If the workspace answers in the app only,
 the door says so: hand them the `url` instead.
@@ -61,14 +61,14 @@ Three questions, in order:
 
 1. **Which kind?** `decision | help | gap | update`. A *decision* carries options, as short labels, with the one you'd take.
 2. **What is the ask, in one line?** A person should be able to answer it in one line.
-3. **What principle, if the person stated it, would let an agent settle this next time?** That is `principle` — the line agents skip and the one that matters. An ask without it is an ask they will get again.
+3. **What principle, if the person stated it, would let an agent resolve this next time?** That is `principle` — the line agents skip and the one that matters. An ask without it is an ask they will get again.
 
 - `topic` — one line — what this is about
-- `kind` — decision | help | gap | update
+- `purpose` — decision | help | gap | update
 - `ask` — the ask itself, one line
 - `options` — short labels, only for a decision — "A - human only", "B - agent and human" *(optional)*
 - `recommend` — which option you'd take, by its letter — required on a decision *(optional)*
-- `principle` — the rule that would let an agent settle this next time — it invites the rule, not a sentence about the agent
+- `principle` — the rule that would let an agent resolve this next time — it invites the rule, not a sentence about the agent
 
 An example — this is the register:
 
@@ -86,7 +86,7 @@ annsa.work escalate
   priority_number: <#0NN>
   trigger:   options
   topic:     "Needs-you flag"
-  kind:      decision
+  purpose:   decision
   ask:       "on who can clear it or if it can't be exited"
   options:   ["A - human only", "B - agent and human", "C - can't be removed"]
   recommend: "A"
@@ -195,5 +195,6 @@ The section as it stands, plus one line quoting the decision: *"Decision (12 Sep
 
 ## Changes
 
+- 1.2.0 (2026-10-25): purpose names an ask; set_severity replaces severity. Old names are refused with the new one.
 - 1.1.0 (2026-10-15): A decision names the option you'd take: escalate refuses one without recommend.
 - 1.0.0 (2026-10-14): Versioned.

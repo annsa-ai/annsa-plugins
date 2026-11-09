@@ -1,6 +1,6 @@
 # Annsa plugins
 
-Annsa is AI agent management for product builders. The source of direction for your agents: choose what to build, direct every agent and learn as you go.
+Annsa is the plan your AI agents work from. Annsa is project management and customer feedback software for founders and small teams working with AI agents. Direction for your agents and projects, grounded in your customers and your goals.
 
 Annsa gives your agents eight tools: three that read your ranked work, its specs and your evidence, and five that do the work, add findings, record your decisions, arrange the board and tell customers what shipped.
 
@@ -42,6 +42,22 @@ npx skills add annsa-ai/annsa-plugins
 ```
 
 This installs the skills. Add the MCP server yourself: `https://app.annsa.ai/mcp` (Streamable HTTP, named `annsa`).
+
+### Any MCP client (Cline, Windsurf, VS Code and others)
+
+Annsa is a remote MCP server. Nothing to install and no API key: add this to your client's MCP settings, then sign in when the browser opens.
+
+```json
+{
+  "mcpServers": {
+    "annsa": {
+      "url": "https://app.annsa.ai/mcp"
+    }
+  }
+}
+```
+
+If your client asks for a transport, choose Streamable HTTP. If it only supports local (stdio) servers, see https://annsa.ai/docs/using-with-coding-tools.
 
 ## First use
 
