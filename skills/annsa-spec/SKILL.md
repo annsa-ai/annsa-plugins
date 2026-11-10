@@ -1,12 +1,9 @@
 ---
 name: annsa-spec
-description: >
-  How an agent writes an Annsa spec over MCP. Use when you hold a priority and
-  need to write its sections from the evidence annsa.spec returns; when a
-  write is refused; or when a spec carries updates to approve. Generated — do
-  not edit by hand.
-version: 1.3.0
-updated: 2026-10-26
+# Generated from backend/scripts/skill_annsa_spec.py; do not edit by hand.
+description: "Teaches your agent to write a spec from your customers' feedback, with Done When lines it has to prove. Use when you hold a priority and write its sections."
+version: 1.4.0
+updated: 2026-11-10
 ---
 
 # Writing a spec
@@ -172,6 +169,6 @@ Each update: `id`, `section`, `reason`, `proposed_text`, `previous_text`, `propo
 
 ## Changes
 
+- 1.4.0 (2026-11-10): The description is one plain line, so plugin directories show it.
 - 1.3.0 (2026-10-26): Send label on every write; the seat does not stick on its own.
 - 1.2.0 (2026-10-25): The section is Evidence and direction again; signals_and_direction is refused.
-- 1.1.0 (2026-10-25): unclaim replaces release; release is refused with the new name.
