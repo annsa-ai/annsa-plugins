@@ -1,15 +1,9 @@
 ---
 name: annsa-decisions
-description: >
-  The loop for a question only a person can answer: raise it as a three-line
-  ask with `annsa.work escalate`, read the answer back on `annsa.spec`, answer a
-  question a person sends back, apply the decision to the spec. Use when a
-  question changes scope, affects customers/revenue/security/irreversible data,
-  contradicts a principle, or needs a choice between legitimate options. Not for
-  anything you can resolve from existing direction. Generated — do not edit
-  by hand.
-version: 1.2.0
-updated: 2026-10-25
+# Generated from backend/scripts/skill_annsa_decisions.py; do not edit by hand.
+description: "Teaches your agent when to bring a decision to you, and how to follow your answer. Use when a question changes scope, affects customers or needs a real choice."
+version: 1.3.0
+updated: 2026-11-10
 ---
 
 # Decisions
@@ -195,6 +189,6 @@ The section as it stands, plus one line quoting the decision: *"Decision (12 Sep
 
 ## Changes
 
+- 1.3.0 (2026-11-10): The description is one plain line, so plugin directories show it.
 - 1.2.0 (2026-10-25): purpose names an ask; set_severity replaces severity. Old names are refused with the new one.
 - 1.1.0 (2026-10-15): A decision names the option you'd take: escalate refuses one without recommend.
-- 1.0.0 (2026-10-14): Versioned.

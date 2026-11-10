@@ -1,13 +1,9 @@
 ---
 name: annsa-working
-description: >
-  How to work with Annsa over MCP: check you are in the right workspace,
-  pick the right work, know what you may do alone, prove it shipped, and
-  recover when a call fails. Use at the start of any session that reads
-  or writes Annsa, and when a call is refused or times out. Generated;
-  do not edit by hand.
-version: 5.27.0
-updated: 2026-11-06
+# Generated from backend/scripts/skill_annsa_working.py; do not edit by hand.
+description: "Teaches your agent to work from Annsa: take the next priority, follow the plan, and prove what shipped. Use at the start of any session that reads or writes Annsa, and when a call fails."
+version: 5.28.0
+updated: 2026-11-10
 ---
 
 # Working with Annsa
@@ -107,6 +103,6 @@ Merged is not deployed, deployed is not verified, verified is not confirmed by t
 
 ## Changes
 
+- 5.28.0 (2026-11-10): The description is one plain line, so plugin directories show it.
 - 5.27.0 (2026-11-06): `who` comes on a connection's first reply, and after a change; a read after that carries none.
 - 5.26.0 (2026-11-05): annsa.file report tells the Annsa team about a bug, a gap or an idea in Annsa itself: once, then carry on, never with your workspace's own customer data.
-- 5.25.0 (2026-11-04): The person-only list now says what agents may do with bets: create, list and update (bucket and aim_pct).
