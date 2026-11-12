@@ -18,8 +18,7 @@ import shlex
 import subprocess
 import sys
 import time
-import urllib.error
-import urllib.request
+from urllib.parse import urlsplit
 
 HOME = os.path.expanduser("~/.annsa")
 FRESH_SECONDS = 300
@@ -35,24 +34,50 @@ WRAPPERS = {"sudo", "command", "time", "nohup", "exec"}
 # ---------- config ----------
 
 
+API_HOSTS = {"api.annsa.ai", "app.annsa.ai", "canopy.annsa.ai"}
+DEFAULT_API = "https://api.annsa.ai"
+
+
+def api_ok(url):
+    """The token only goes to Annsa's own hosts over HTTPS. Localhost is allowed only
+    when ANNSA_ENFORCE_DEV=1 is set in the environment (never from a config file)."""
+    try:
+        u = urlsplit(url)
+        host = (u.hostname or "").lower()
+        u.port  # raises on a bad port
+    except ValueError:
+        return False
+    if u.username or u.password:
+        return False
+    if u.scheme == "https" and host in API_HOSTS:
+        return True
+    return (
+        os.environ.get("ANNSA_ENFORCE_DEV") == "1"
+        and u.scheme in ("http", "https")
+        and host in ("127.0.0.1", "localhost")
+    )
+
+
 def config():
-    """API host and token. ~/.annsa/enforce.json overrides the defaults (used to
-    point a dogfood install at staging); ANNSA_API_URL and ANNSA_TOKEN override that."""
-    cfg = {"api": "https://api.annsa.ai", "token_file": os.path.join(HOME, "token.json")}
+    """API host and token. ~/.annsa/enforce.json (or ANNSA_ENFORCE_CONFIG) may name only
+    `api`, and only an Annsa host; ANNSA_API_URL overrides that. The token comes from
+    ANNSA_TOKEN or ~/.annsa/token.json, never from a path a config file names."""
+    cfg = {"api": DEFAULT_API}
     path = os.environ.get("ANNSA_ENFORCE_CONFIG", os.path.join(HOME, "enforce.json"))
     try:
         with open(path) as f:
-            cfg.update(json.load(f))
+            loaded = json.load(f)
+        if isinstance(loaded, dict) and isinstance(loaded.get("api"), str):
+            cfg["api"] = loaded["api"]
     except (OSError, ValueError):
         pass
     cfg["api"] = os.environ.get("ANNSA_API_URL", cfg["api"]).rstrip("/")
-    # The token only ever goes over HTTPS (plain HTTP only to this machine, for tests).
-    if not re.match(r"^(https://|http://(127\.0\.0\.1|localhost)(:\d+)?(/|$))", cfg["api"]):
-        cfg["api"] = "https://api.annsa.ai"
+    if not api_ok(cfg["api"]):
+        cfg["api"] = DEFAULT_API
     token = os.environ.get("ANNSA_TOKEN")
     if not token:
         try:
-            with open(os.path.expanduser(cfg["token_file"])) as f:
+            with open(os.path.join(HOME, "token.json")) as f:
                 raw = f.read().strip()
             token = json.loads(raw).get("token") if raw.startswith("{") else raw
         except (OSError, ValueError, AttributeError):
@@ -71,6 +96,9 @@ def cache_path(cfg):
 
 def fetch(cfg, etag=None):
     """Returns (status, data, etag). status is 'ok', 'same' or 'error'."""
+    import urllib.error
+    import urllib.request
+
     req = urllib.request.Request(cfg["api"] + "/mcp/enforce")
     req.add_header("Authorization", "Bearer " + cfg["token"])
     req.add_header("Accept", "application/json")
@@ -119,7 +147,11 @@ def enforce_list(cfg):
     except (OSError, ValueError):
         cached = None
     if cached:
-        age = time.time() - cached.get("fetched_at", 0)
+        fetched = cached.get("fetched_at")
+        age = time.time() - fetched if isinstance(fetched, (int, float)) else -1
+        if age < 0:
+            cached = None  # a timestamp in the future is not to be trusted: refetch
+    if cached:
         if age < FRESH_SECONDS:
             return cached["data"]
         if age < STALE_LIMIT_SECONDS:
@@ -137,9 +169,40 @@ def enforce_list(cfg):
 
 # ---------- splitting a command into what actually runs ----------
 
+# Words that run another command and are not themselves what matters.
+WRAPPER_ARGS = {
+    "sudo": {"-u", "-g", "-h", "-p", "-C", "-T", "-r", "-t", "-U", "-D", "-R"},
+    "doas": {"-u", "-C"},
+    "env": {"-u", "-C", "-S"},
+    "nice": {"-n"},
+    "ionice": {"-c", "-n", "-p"},
+    "xargs": {"-I", "-n", "-P", "-L", "-s", "-d", "-E", "-a", "-J"},
+    "timeout": {"-s", "-k"},
+    "exec": {"-a"},
+    "stdbuf": {"-i", "-o", "-e"},
+    "caffeinate": {"-t", "-w"},
+    "command": set(),
+    "builtin": set(),
+    "time": set(),
+    "nohup": set(),
+    "setsid": set(),
+}
+CONTROL_WORDS = {"if", "then", "else", "elif", "do", "while", "until", "!", "{", "(", "{(", "((", "&"}
+SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
+GIT_GLOBAL_WITH_ARG = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"}
+GIT_GLOBAL_FLAGS = {"--no-pager", "-p", "-P", "--paginate", "--bare", "--no-replace-objects",
+                    "--literal-pathspecs", "--no-optional-locks", "--no-lazy-fetch"}
+MAX_DEPTH = 3
+# Any of these in a command means an enforced principle could be in play.
+VERB_RE = re.compile(
+    r"\b(git|gh|vercel|netlify|fly|flyctl|railway|aws|terraform|npm|pnpm|yarn|bun|rm|psql|mysql|sqlite3|supabase)\b"
+)
+DYNAMIC_RE = re.compile(r"[$`*?\[{]")
+ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
 
 def split_outside_quotes(command):
-    """Split on && || ; | and newlines, but never inside quotes, so a commit message
+    """Split on && || ; | & and newlines, but never inside quotes, so a commit message
     that says "fix; rm -rf x" stays one argument."""
     parts, buf, quote, i = [], [], None, 0
     while i < len(command):
@@ -161,6 +224,9 @@ def split_outside_quotes(command):
             parts.append("".join(buf))
             buf = []
             i += 1
+        elif c == "&" and (i == 0 or command[i - 1] not in "<>&") and not command.startswith(">", i + 1):
+            parts.append("".join(buf))  # a background `&`, not `2>&1` or `&>`
+            buf = []
         elif c in ";|\n":
             parts.append("".join(buf))
             buf = []
@@ -171,50 +237,166 @@ def split_outside_quotes(command):
     return parts
 
 
-def segments(command, depth=0):
-    """Every simple command inside `command`, one level into bash -c, eval and $( )."""
+def substitutions(s):
+    """The inside of every $( ), backtick and <( ) in `s`, skipping single quotes."""
+    out, i, sq, dq = [], 0, False, False
+    while i < len(s):
+        c = s[i]
+        if sq:
+            sq = c != "'"
+        elif c == "\\":
+            i += 1
+        elif c == "'" and not dq:
+            sq = True
+        elif c == '"':
+            dq = not dq
+        elif c == "`":
+            j = i + 1
+            while j < len(s) and s[j] != "`":
+                j += 2 if s[j] == "\\" else 1
+            out.append(s[i + 1 : j])
+            i = j
+        elif c in "$<>" and s.startswith("(", i + 1):
+            depth, j = 1, i + 2
+            while j < len(s) and depth:
+                depth += (s[j] == "(") - (s[j] == ")")
+                j += 1
+            out.append(s[i + 2 : j - (1 if depth == 0 else 0)])
+            i += 1
+        i += 1
+    return out
+
+
+def strip_wrapper(name, words):
+    """Drop a wrapper's own options and return the command it runs."""
+    takes_arg = WRAPPER_ARGS[name]
+    while words:
+        w = words[0]
+        if w == "--":
+            words = words[1:]
+            break
+        if w.startswith("-") and len(w) > 1:
+            words = words[2:] if w in takes_arg else words[1:]
+            continue
+        break
+    if name == "timeout" and words:
+        words = words[1:]  # the duration
+    return words
+
+
+def strip_prefix(words):
+    """Peel assignments, control words and wrappers off the front. Returns (words, via_xargs)."""
+    via_xargs = False
+    while words:
+        w = words[0]
+        if ASSIGN_RE.match(w) or w in CONTROL_WORDS:
+            words = words[1:]
+            continue
+        name = os.path.basename(w)
+        if name in WRAPPER_ARGS:
+            via_xargs = via_xargs or name == "xargs"
+            words = strip_wrapper(name, words[1:])
+            continue
+        words = [name] + words[1:]
+        break
+    return words, via_xargs
+
+
+def segments(command, issues, depth=0):
+    """Every simple command inside `command`, followed into bash -c, eval, $( ) and
+    backticks. Anything that can't be followed is noted in `issues`."""
     out = []
-    for inner in re.findall(r"\$\(([^()]*)\)", command):
-        if depth < 1:
-            out.extend(segments(inner, depth + 1))
+    if depth >= MAX_DEPTH:
+        issues.append("too deeply nested")
+        return out
+    for inner in substitutions(command):
+        out.extend(segments(inner, issues, depth + 1))
     for part in split_outside_quotes(command):
         part = part.strip()
         if not part:
             continue
+        grouped = part.startswith("(")
         try:
-            words = shlex.split(part, posix=True)
+            words = shlex.split(part.lstrip("({ "), posix=True)
         except ValueError:
-            words = part.split()
-        while words and (re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", words[0]) or words[0] in WRAPPERS):
-            words = words[1:]
+            words = part.lstrip("({ ").split()
+            issues.append("unbalanced quote")
+        if grouped and words:
+            words[-1] = words[-1].rstrip(")")
+        words, via_xargs = strip_prefix(words)
         if not words:
             continue
-        if depth < 1 and words[0] in ("bash", "sh", "zsh") and "-c" in words:
-            i = words.index("-c")
-            if i + 1 < len(words):
-                out.extend(segments(words[i + 1], depth + 1))
-                continue
-        if depth < 1 and words[0] == "eval":
-            out.extend(segments(" ".join(words[1:]), depth + 1))
+        head = words[0]
+        if DYNAMIC_RE.search(head):
+            issues.append("a command name that is built at run time")
             continue
+        if head in SHELLS:
+            flag = next((i for i, w in enumerate(words[1:], 1)
+                         if re.match(r"^-[A-Za-z]*c[A-Za-z]*$", w)), None)
+            if flag is not None and flag + 1 < len(words):
+                out.extend(segments(words[flag + 1], issues, depth + 1))
+                continue
+        if head == "eval":
+            out.extend(segments(" ".join(words[1:]), issues, depth + 1))
+            continue
+        if via_xargs:
+            words = ["xargs:"] + words  # marker: its last arguments arrive on stdin
         out.append(words)
     return out
 
 
-def with_dirs(command, cwd):
+def with_dirs(command, cwd, issues=None):
     """Pair each segment with the directory it acts in, following cd and git -C."""
+    issues = [] if issues is None else issues
     here = cwd or os.getcwd()
     pairs = []
-    for words in segments(command):
+    for words in segments(command, issues):
+        piped = words[0] == "xargs:"
+        if piped:
+            words = words[1:]
         if words[0] in ("cd", "pushd") and len(words) > 1:
             here = os.path.normpath(os.path.join(here, os.path.expanduser(words[1])))
             continue
         where = here
-        if words[0] == "git" and len(words) > 2 and words[1] == "-C":
-            where = os.path.normpath(os.path.join(here, os.path.expanduser(words[2])))
-            words = ["git"] + words[3:]
+        if words[0] == "git":
+            rest, i = [], 1
+            while i < len(words):
+                w = words[i]
+                if w in GIT_GLOBAL_WITH_ARG and i + 1 < len(words):
+                    if w == "-C":
+                        where = os.path.normpath(os.path.join(where, os.path.expanduser(words[i + 1])))
+                    i += 2
+                elif w in GIT_GLOBAL_FLAGS or re.match(r"^--(git-dir|work-tree|namespace|exec-path)=", w):
+                    i += 1
+                else:
+                    rest = words[i:]
+                    break
+            words = ["git"] + rest
+        if piped and VERB_RE.match(words[0]) and not (
+            words[0] == "rm" and not any(w.startswith("-") for w in words[1:])
+        ):
+            issues.append("arguments that arrive on stdin")
         pairs.append((" ".join(words), where))
     return pairs
+
+
+READ_ONLY = {"cat", "ls", "head", "tail", "less", "more", "grep", "egrep", "rg", "stat", "wc",
+             "file", "diff", "test", "[", "echo", "pwd", "true", "cd", "pushd"}
+ANNSA_DIR_RE = re.compile(r"(^|[/\s\"'=~])\.annsa(?![\w.-])")
+
+
+def writes_annsa_dir(command, cwd):
+    """True when the command could change anything in ~/.annsa (the token, the cache, the
+    queue): it names that folder and is not a plain read."""
+    if not ANNSA_DIR_RE.search(command):
+        return False
+    if ">" in command:
+        return True
+    issues = []
+    for line, _ in with_dirs(command, cwd, issues):
+        if line.split(" ", 1)[0] not in READ_ONLY:
+            return True
+    return bool(issues)
 
 
 # ---------- facts about the repo, read only when a pattern needs them ----------
@@ -278,9 +460,13 @@ def matches(rule, line, where):
 
 
 def first_block(command, cwd, data):
-    """(principle, kind, line, where) for the first segment an enforced principle refuses."""
+    """(principle, kind, line, where) for the first segment an enforced principle refuses.
+    When a part of the command can't be followed and it names an enforced verb, that is
+    refused too (the only place this hook fails closed)."""
     kinds = data.get("kinds") or {}
-    for line, where in with_dirs(command, cwd):
+    issues = []
+    pairs = with_dirs(command, cwd, issues)
+    for line, where in pairs:
         for p in data.get("principles") or []:
             kind = kinds.get(p.get("kind"))
             if not kind:
@@ -289,6 +475,10 @@ def first_block(command, cwd, data):
                 continue
             if any(matches(r, line, where) for r in kind.get("refuse", [])):
                 return p, kind, line, where
+    principles = data.get("principles") or []
+    if issues and principles and VERB_RE.search(command):
+        why = {"what": "a command Annsa can't read (%s)" % issues[0]}
+        return principles[0], why, command[:200], os.getcwd() if not cwd else cwd
     return None
 
 
@@ -325,6 +515,8 @@ def private_write(path, lines):
 
 
 def post_block(cfg, body):
+    import urllib.request
+
     queue = os.path.join(HOME, "enforce-queue.jsonl")
     pending = []
     try:
@@ -417,6 +609,9 @@ def main():
     cfg = config()
     if not cfg["token"] and not os.environ.get("ANNSA_ENFORCE_FIXTURE"):
         once(session_id, "token", "Annsa isn't enforcing your principles here: run `npx annsa auth`.")
+        return
+    if writes_annsa_dir(command, event.get("cwd")):
+        deny({"title": "Annsa's own files"}, {"what": "a change to ~/.annsa"}, command[:200])
         return
     data = enforce_list(cfg)
     if data is None:
