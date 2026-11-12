@@ -1,0 +1,17 @@
+{
+  "description": "Annsa: refuse a command that breaks one of your enforceable principles",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/enforce.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
