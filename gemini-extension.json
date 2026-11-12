@@ -1,0 +1,12 @@
+{
+  "name": "annsa",
+  "version": "1.0.9",
+  "description": "The plan your AI agents work from. Project management and customer feedback software for founders and small teams working with AI agents.",
+  "mcpServers": {
+    "annsa": {
+      "type": "http",
+      "url": "https://app.annsa.ai/mcp"
+    }
+  },
+  "contextFileName": "GEMINI.md"
+}

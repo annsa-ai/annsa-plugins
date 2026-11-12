@@ -4,7 +4,7 @@ Annsa is the plan your AI agents work from. Annsa is project management and cust
 
 Annsa gives your agents eight tools: three that read your ranked work, its specs and your evidence, and five that do the work, add findings, record your decisions, arrange the board and tell customers what shipped.
 
-One `skills/` folder and one MCP config (`.mcp.json`) serve Claude Code, Cursor, Codex and Grok Build. The MCP server is remote (`https://app.annsa.ai/mcp`). You sign in with your browser. There is no API key.
+One `skills/` folder and one MCP config (`.mcp.json`) serve Claude Code, Cursor, Codex, Grok Build and Gemini CLI. The MCP server is remote (`https://app.annsa.ai/mcp`). You sign in with your browser. There is no API key.
 
 ## Install
 
@@ -34,6 +34,14 @@ grok plugin marketplace add annsa-ai/annsa-plugins
 grok plugin install annsa --trust
 grok plugin enable annsa
 ```
+
+### Gemini CLI
+
+```bash
+gemini extensions install https://github.com/annsa-ai/annsa-plugins
+```
+
+Then run `/mcp auth annsa` and sign in when the browser opens.
 
 ### Any other agent (skills only)
 
