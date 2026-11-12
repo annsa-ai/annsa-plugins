@@ -1,0 +1,186 @@
+{
+ "workspace": {
+  "name": "Annsa"
+ },
+ "version": "b3879c9ea3fc27f0ca54",
+ "catalogue_version": "1",
+ "principles": [
+  {
+   "principle_id": "p-deploy",
+   "number": 1,
+   "title": "Test deploy",
+   "kind": "deploy"
+  },
+  {
+   "principle_id": "p-push_main",
+   "number": 2,
+   "title": "Test push_main",
+   "kind": "push_main"
+  },
+  {
+   "principle_id": "p-merge_main",
+   "number": 3,
+   "title": "Test merge_main",
+   "kind": "merge_main"
+  },
+  {
+   "principle_id": "p-approve_pr",
+   "number": 4,
+   "title": "Test approve_pr",
+   "kind": "approve_pr"
+  },
+  {
+   "principle_id": "p-destructive",
+   "number": 5,
+   "title": "Test destructive",
+   "kind": "destructive"
+  }
+ ],
+ "kinds": {
+  "deploy": {
+   "what": "a deploy",
+   "refuse": [
+    {
+     "re": "^gh workflow run .*[Dd]eploy"
+    },
+    {
+     "re": "^vercel( [^ ]+)* --prod( |$)"
+    },
+    {
+     "re": "^vercel( [^ ]+)* promote( |$)"
+    },
+    {
+     "re": "^netlify deploy( [^ ]+)* --prod( |$)"
+    },
+    {
+     "re": "^(fly|flyctl) deploy( |$)"
+    },
+    {
+     "re": "^railway up( |$)"
+    },
+    {
+     "re": "^aws apprunner start-deployment( |$)"
+    },
+    {
+     "re": "^terraform apply( |$)"
+    },
+    {
+     "re": "^(npm|pnpm|yarn|bun) run deploy[^ ]*( |$)"
+    }
+   ],
+   "allow": [
+    {
+     "re": "^terraform apply( [^ ]+)* -destroy( |$)"
+    }
+   ]
+  },
+  "push_main": {
+   "what": "a push to the default branch",
+   "refuse": [
+    {
+     "re": "^git push( [^ ]+)* \\+?([^ ]*:)?(refs/heads/)?({default})( |$)"
+    },
+    {
+     "re": "^git push( -[^ ]+)*( [^ -][^ ]*)?( -[^ ]+)*$",
+     "when": "head_is_default"
+    }
+   ],
+   "allow": [
+    {
+     "re": "^git push( [^ ]+)* (--dry-run|-n)( |$)"
+    }
+   ]
+  },
+  "merge_main": {
+   "what": "a merge into the default branch",
+   "refuse": [
+    {
+     "re": "^gh pr merge( |$)",
+     "when": "pr_base_is_default"
+    },
+    {
+     "re": "^git merge( |$)",
+     "when": "head_is_default"
+    }
+   ],
+   "allow": [
+    {
+     "re": "^git merge( [^ ]+)* --(abort|quit)( |$)"
+    }
+   ]
+  },
+  "approve_pr": {
+   "what": "approving a pull request",
+   "refuse": [
+    {
+     "re": "^gh pr review( [^ ]+)* (--approve|-a)( |$)"
+    },
+    {
+     "re": "^gh api .*/reviews( |$).*APPROVE"
+    }
+   ],
+   "allow": []
+  },
+  "destructive": {
+   "what": "a destructive command",
+   "refuse": [
+    {
+     "re": "^rm( [^ ]+)* -[a-zA-Z]*([rR][a-zA-Z]*f|f[a-zA-Z]*[rR])[a-zA-Z]*( |$)"
+    },
+    {
+     "re": "^rm( [^ ]+)* -[rR]( [^ ]+)* -f( |$)"
+    },
+    {
+     "re": "^rm( [^ ]+)* -f( [^ ]+)* -[rR]( |$)"
+    },
+    {
+     "re": "^rm( [^ ]+)* --recursive( [^ ]+)* --force( |$)"
+    },
+    {
+     "re": "^rm( [^ ]+)* --force( [^ ]+)* --recursive( |$)"
+    },
+    {
+     "re": "^git reset( [^ ]+)* --hard( |$)"
+    },
+    {
+     "re": "^git clean( [^ ]+)* (-[a-zA-Z]*f[a-zA-Z]*|--force)( |$)"
+    },
+    {
+     "re": "^git push( [^ ]+)* (--force|-f|--force-with-lease[^ ]*)( |$)"
+    },
+    {
+     "re": "^git push( [^ ]+)* \\+[^ ]+"
+    },
+    {
+     "re": "^git branch( [^ ]+)* (-[a-zA-Z]*D[a-zA-Z]*)( |$)"
+    },
+    {
+     "re": "^(psql|mysql|sqlite3|supabase db (execute|query))( .*)? .*(drop (table|database|schema)|truncate )",
+     "icase": true
+    },
+    {
+     "re": "^supabase db reset( |$)"
+    },
+    {
+     "re": "^terraform destroy( |$)"
+    },
+    {
+     "re": "^terraform apply( [^ ]+)* -destroy( |$)"
+    }
+   ],
+   "allow": [
+    {
+     "re": "^rm( -[^ ]+)*( (([^ ]*/)?(node_modules|dist|build|out|\\.next|\\.turbo|\\.cache|coverage|__pycache__|\\.pytest_cache|\\.mypy_cache|\\.ruff_cache|target)/?|/tmp/[^ ]+|/private/tmp/[^ ]+|/var/folders/[^ ]+|\\$TMPDIR[^ ]*|\\$\\{TMPDIR\\}[^ ]*))+$",
+     "no_dotdot": true
+    },
+    {
+     "re": "^git clean( [^ ]+)* (-[a-zA-Z]*n[a-zA-Z]*|--dry-run)( |$)"
+    },
+    {
+     "re": "^git push( [^ ]+)* (--dry-run|-n)( |$)"
+    }
+   ]
+  }
+ },
+ "ttl": 300
+}
