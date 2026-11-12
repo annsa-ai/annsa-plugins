@@ -63,7 +63,7 @@ If your client asks for a transport, choose Streamable HTTP. If it only supports
 
 A principle you switch to Enforce in Annsa stops the agent's matching shell command before it runs: a deploy, a push or merge to the default branch, an approved PR, a destructive command. The hook is in `hooks/` and loads with the plugin in Claude Code (PreToolUse) and Cursor (beforeShellExecution). Codex and Grok Build don't run it; they follow the principle as a rule.
 
-The hook reads your sign-in from `~/.annsa/token.json`, so run `npx annsa auth` once. It checks commands on your machine, logs each refusal on the principle, and lets the command run if Annsa can't be reached. Set `ANNSA_ENFORCE=0` to switch it off on one machine. It sends your token only to api.annsa.ai, app.annsa.ai or canopy.annsa.ai. It stops honest mistakes, not a determined adversary.
+The hook reads your sign-in from `~/.annsa/token.json`, so run `npx annsa auth` once. It checks commands on your machine, logs each refusal on the principle, and lets the command run if Annsa can't be reached. Set `ANNSA_ENFORCE=0` to switch it off on one machine. It sends your token only to api.annsa.ai, app.annsa.ai or canopy.annsa.ai. It stops honest mistakes, not a determined adversary: it runs as the same user as the agent, so it can't protect its own cache or token from a determined agent.
 
 ## First use
 

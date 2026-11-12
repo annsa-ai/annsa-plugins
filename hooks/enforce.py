@@ -302,6 +302,26 @@ def strip_prefix(words):
     return words, via_xargs
 
 
+INLINE_CODE = {  # command: the flags that hand it code or another command to run
+    "perl": {"-e", "-E"}, "ruby": {"-e"}, "node": {"-e", "-p", "--eval"}, "nodejs": {"-e"},
+    "php": {"-r"}, "lua": {"-e"}, "script": {"-c"}, "awk": set(), "gawk": set(),
+    "find": {"-exec", "-execdir", "-ok", "-okdir", "-delete"},
+    "watch": None, "flock": None,  # always run another command
+}
+
+
+def runs_inline_code(head, words):
+    """True for an interpreter or runner that carries code or a command the parser can't read."""
+    if re.match(r"^python[0-9.]*$", head):
+        return any(re.match(r"^-[A-Za-z]*c$", w) for w in words[1:])
+    if head not in INLINE_CODE:
+        return False
+    flags = INLINE_CODE[head]
+    if flags is None:
+        return True
+    return any(w in flags or (head in ("perl", "ruby") and re.match(r"^-[A-Za-z]*e$", w)) for w in words[1:])
+
+
 def segments(command, issues, depth=0):
     """Every simple command inside `command`, followed into bash -c, eval, $( ) and
     backticks. Anything that can't be followed is noted in `issues`."""
@@ -336,6 +356,8 @@ def segments(command, issues, depth=0):
             if flag is not None and flag + 1 < len(words):
                 out.extend(segments(words[flag + 1], issues, depth + 1))
                 continue
+        if runs_inline_code(head, words):
+            issues.append("an interpreter running inline code")
         if head == "eval":
             out.extend(segments(" ".join(words[1:]), issues, depth + 1))
             continue
@@ -380,8 +402,10 @@ def with_dirs(command, cwd, issues=None):
     return pairs
 
 
-READ_ONLY = {"cat", "ls", "head", "tail", "less", "more", "grep", "egrep", "rg", "stat", "wc",
+# less, more and rg are left out on purpose: they can run other programs.
+READ_ONLY = {"cat", "ls", "head", "tail", "grep", "egrep", "stat", "wc",
              "file", "diff", "test", "[", "echo", "pwd", "true", "cd", "pushd"}
+RUNS_PROGRAMS = re.compile(r"^-(-pre|-exec|exec|execdir|ok|okdir|delete)(=|$)")
 ANNSA_DIR_RE = re.compile(r"(^|[/\s\"'=~])\.annsa(?![\w.-])")
 
 
@@ -395,6 +419,8 @@ def writes_annsa_dir(command, cwd):
     issues = []
     for line, _ in with_dirs(command, cwd, issues):
         if line.split(" ", 1)[0] not in READ_ONLY:
+            return True
+        if any(RUNS_PROGRAMS.match(w) for w in line.split(" ")[1:]):
             return True
     return bool(issues)
 

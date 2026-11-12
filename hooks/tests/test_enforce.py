@@ -323,6 +323,25 @@ def test_writes_into_the_annsa_folder_are_refused():
         assert not refused(run(c)), c
 
 
+def test_interpreters_and_runners_with_an_enforced_verb_are_refused():
+    for c in ["python3 -c \"import os; os.system('git push origin main')\"",
+              "python -c 'import subprocess; subprocess.run([\"git\",\"push\"])'",
+              "perl -e 'system(\"git push origin main\")'", "ruby -e 'system(\"rm -rf x\")'",
+              "node -e \"require('child_process').execSync('git push origin main')\"",
+              "find . -name x -exec git push origin main \\;", "watch git push origin main",
+              "script -c 'git push origin main' /dev/null", "flock /tmp/l git push origin main"]:
+        assert refused(run(c)), c
+    assert not refused(run("python3 -c 'print(1)'"))
+    assert not refused(run("find . -name '*.py'"))
+
+
+def test_interpreters_and_programs_touching_annsa_are_refused():
+    for c in ["python3 -c \"open('/Users/x/.annsa/token.json','w')\"", "perl -e 'unlink \"$ENV{HOME}/.annsa/token.json\"'",
+              "find ~/.annsa -delete", "find ~/.annsa -exec rm {} +", "less ~/.annsa/token.json",
+              "more ~/.annsa/enforce.json", "rg --pre ./x foo ~/.annsa", "grep --pre=x a ~/.annsa/token.json"]:
+        assert refused(run(c)), c
+
+
 def test_a_planted_config_cannot_redirect_the_token():
     home = tempfile.mkdtemp()
     planted = os.path.join(home, "enforce.json")
