@@ -599,6 +599,52 @@ def test_a_fixed_kind_refusal_still_posts_its_own_kind():
     assert post[3]["kind"] == "push_main"
 
 
+FORCE = limit("command", "git push ** --force*", "123456abcdef", reason="Force pushes are a person's")
+FORCE_CMD = "git push origin main --force"
+
+
+def test_every_rule_that_blocks_is_named_and_posted_once_each():
+    out, seen = run_live(FORCE_CMD, served(FORCE))
+    assert refused(out)
+    reason = out["hookSpecificOutput"]["permissionDecisionReason"]
+    assert reason.startswith('Your principle "Test push_main" (#2) blocks this')
+    assert "Also: Force pushes are a person's." in reason
+    posts = [s[3] for s in seen if s[0] == "POST"]
+    # the fixture's destructive principle also refuses a force push, so three rules block it
+    assert [p["kind"] for p in posts] == ["push_main", "destructive", "custom:123456abcdef"]
+    assert [p["principle_id"] for p in posts] == ["p-push_main", "p-destructive", "p-123456abcdef"]
+    assert all(p["command"] == FORCE_CMD for p in posts)
+
+
+def test_two_rules_in_the_cursor_answer():
+    out = run(FORCE_CMD, served(FORCE), cursor=True)
+    assert out["permission"] == "deny"
+    for key in ("user_message", "agent_message"):
+        assert "Test push_main" in out[key] and "Also: Force pushes are a person's." in out[key]
+
+
+def test_two_fixed_kinds_are_both_named_with_the_principle_and_kind():
+    out = run("git push origin main && gh workflow run Deploy", served(FORCE, principles=True))
+    reason = out["hookSpecificOutput"]["permissionDecisionReason"]
+    assert 'Also: your principle "Test deploy" (deploy).' in reason
+
+
+def test_one_rule_alone_is_unchanged():
+    out, seen = run_live("git push origin main", served(FORCE))
+    reason = out["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "Also" not in reason
+    assert [s[3]["kind"] for s in seen if s[0] == "POST"] == ["push_main"]
+    out, seen = run_live("kubectl delete pod web", served(COMMAND))
+    assert "Also" not in out["hookSpecificOutput"]["permissionDecisionReason"]
+    assert len([s for s in seen if s[0] == "POST"]) == 1
+    assert "Also" not in run("git push origin main", served(FORCE), cursor=True)["user_message"]
+
+
+def test_a_rule_that_repeats_is_named_once():
+    out = run("git push origin main; git push origin main", served(FORCE))
+    assert "Also" not in out["hookSpecificOutput"]["permissionDecisionReason"]
+
+
 def test_a_cache_from_the_old_hook_does_not_answer_the_new_one():
     enforce = load_enforce()
     cfg = {"api": "https://api.annsa.ai", "token": "t"}
@@ -611,7 +657,7 @@ def test_the_gemini_manifest_carries_the_same_version():
     versions = {json.load(open(os.path.join(root, f)))["version"] for f in
                 ("gemini-extension.json", ".claude-plugin/plugin.json", ".cursor-plugin/plugin.json",
                  ".codex-plugin/plugin.json", ".grok-plugin/plugin.json")}
-    assert versions == {"1.2.0"}
+    assert versions == {"1.2.1"}
 
 
 # --- security review of PR #7: four mediums --------------------------------------------
