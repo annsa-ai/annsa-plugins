@@ -7,7 +7,7 @@
       "name": "annsa",
       "description": "The plan your AI agents work from. Project management and customer feedback software for founders and small teams working with AI agents.",
       "category": "productivity",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "source": { "type": "local", "path": "./" },
       "homepage": "https://annsa.ai",
       "license": "MIT",

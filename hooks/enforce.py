@@ -537,27 +537,35 @@ def matches(rule, line, where):
     return True
 
 
-def first_block(command, cwd, data):
-    """(principle, kind, line, where) for the first segment an enforced principle refuses.
+def all_blocks(command, cwd, data):
+    """[(principle, kind, line, where)], one per enforced principle that refuses some
+    segment of the command, in the list's order (1.2.1: every rule that blocks, not the first).
     When a part of the command can't be followed and it names an enforced verb, that is
     refused too (the only place this hook fails closed)."""
     kinds = data.get("kinds") or {}
     issues = []
     pairs = with_dirs(command, cwd, issues)
+    found, seen = [], set()
     for line, where in pairs:
         for p in data.get("principles") or []:
             kind = kinds.get(p.get("kind"))
             if not kind:
                 continue
+            key = (p.get("principle_id"), p.get("kind"))
+            if key in seen:
+                continue
             if any(matches(r, line, where) for r in kind.get("allow", [])):
                 continue
             if any(matches(r, line, where) for r in kind.get("refuse", [])):
-                return p, kind, line, where
+                seen.add(key)
+                found.append((p, kind, line, where))
+    if found:
+        return found
     principles = data.get("principles") or []
     if issues and principles and VERB_RE.search(command):
         why = {"what": "a command Annsa can't read (%s)" % issues[0]}
-        return principles[0], why, command[:200], os.getcwd() if not cwd else cwd
-    return None
+        return [(principles[0], why, command[:200], os.getcwd() if not cwd else cwd)]
+    return []
 
 
 # ---------- a workspace's own limits (GET /mcp/enforce `limits`, 1.2.0) ----------
@@ -628,7 +636,7 @@ def wrapper_hides_dir(entry):
 
 
 def limit_what(limit, why=None):
-    return {"what": why or "a limit your workspace set (%s)" % limit["reason"]}
+    return {"what": why or "a limit your workspace set (%s)" % limit["reason"], "reason": limit["reason"]}
 
 
 def limit_could_apply(limit, command):
@@ -638,12 +646,19 @@ def limit_could_apply(limit, command):
 
 
 def limit_hit(command, cwd, data):
-    """(principle, kind, line, where, limit) for the first segment a switched-on command or
-    path limit refuses, or None. Fails closed: a segment it can't read that a limit could
-    apply to is refused, and so is an error inside the check."""
+    """The first of limit_hits, or None."""
+    hits = limit_hits(command, cwd, data)
+    return hits[0] if hits else None
+
+
+def limit_hits(command, cwd, data):
+    """[(principle, kind, line, where, post)], one per switched-on command or path limit that
+    refuses the command. Fails closed: a segment it can't read that a limit could apply to
+    is refused, and so is an error inside the check."""
     active = usable_limits(data)
     if not active:
-        return None
+        return []
+    found, seen = [], set()
     here = os.getcwd() if not cwd else cwd
     try:
         issues = []
@@ -658,18 +673,19 @@ def limit_hit(command, cwd, data):
                     else:
                         hit = wrapper_hides_dir(e) or limits.command_touches_path(
                             limit["pattern"], e["tokens"], cwd=e["where"], original=e["every"])
-                if hit:
-                    return _limit_result(limit, e["line"], e["where"])
-        if issues:
+                if hit and id(limit) not in seen:
+                    seen.add(id(limit))
+                    found.append(_limit_result(limit, e["line"], e["where"]))
+        if issues and not found:
             for limit in active:
                 if limit_could_apply(limit, command):
                     why = "a command Annsa can't read (%s), under a limit your workspace set (%s)" % (
                         issues[0], limit["reason"])
-                    return _limit_result(limit, command[:200], here, why)
+                    found.append(_limit_result(limit, command[:200], here, why))
     except Exception:  # a limit never fails open
         limit = active[0]
-        return _limit_result(limit, command[:200], here, "a command Annsa couldn't check against your limits", post=False)
-    return None
+        return [_limit_result(limit, command[:200], here, "a command Annsa couldn't check against your limits", post=False)]
+    return found
 
 
 def _limit_result(limit, line, where, why=None, post=True):
@@ -760,13 +776,27 @@ def once(session_id, key, message):
         print(json.dumps({"systemMessage": message}))
 
 
-def deny(principle, kind, line):
+MAX_ALSO = 5  # extra rules named in one refusal; every one is still logged
+
+
+def also_line(principle, kind):
+    if kind.get("reason"):
+        return "Also: %s." % kind["reason"].rstrip(".")
+    return "Also: your principle \"%s\" (%s)." % (principle.get("title", "your principle"), principle.get("kind"))
+
+
+def deny(principle, kind, line, extra=()):
     number = principle.get("number")
     name = f"\"{principle.get('title', 'your principle')}\"" + (f" (#{number})" if number else "")
     reason = (
         f"Your principle {name} blocks this, as {kind.get('what', 'a refused command')}: `{line}`. "
         "Say it's ready for a person to run instead. This block is logged on the principle in Annsa."
     )
+    also = [also_line(p, k) for p, k in list(extra)[:MAX_ALSO]]
+    if len(extra) > MAX_ALSO:
+        also.append("Also: %d more rules." % (len(extra) - MAX_ALSO))
+    if also:
+        reason += " " + " ".join(also)
     ANSWERED.append(1)
     if CURSOR:
         print(json.dumps({"permission": "deny", "user_message": reason, "agent_message": reason}))
@@ -813,27 +843,25 @@ def main():
     if data is None:
         once(session_id, "offline", "Annsa can't be reached, so your principles aren't enforced in this session.")
         return
-    post = True
-    hit = first_block(command, event.get("cwd"), data) if data.get("principles") else None
-    if not hit:
-        hit = limit_hit(command, event.get("cwd"), data)
-        if hit:
-            hit, post = hit[:4], hit[4]
-    if not hit:
+    hits = [h + (True,) for h in (all_blocks(command, event.get("cwd"), data) if data.get("principles") else [])]
+    hits += limit_hits(command, event.get("cwd"), data)
+    if not hits:
         return
-    principle, kind, line, where = hit
-    deny(principle, kind, line)
-    if post and not os.environ.get("ANNSA_ENFORCE_NO_POST"):
-        post_block(
-            cfg,
-            {
-                "principle_id": principle.get("principle_id"),
-                "kind": principle.get("kind"),
-                "command": redact(line),
-                "dir": repo_name(where),
-                "session_id": session_id,
-            },
-        )
+    principle, kind, line, where, _ = hits[0]
+    deny(principle, kind, line, [(h[0], h[1]) for h in hits[1:]])
+    if not os.environ.get("ANNSA_ENFORCE_NO_POST"):
+        for principle, kind, line, where, post in hits:
+            if post:
+                post_block(
+                    cfg,
+                    {
+                        "principle_id": principle.get("principle_id"),
+                        "kind": principle.get("kind"),
+                        "command": redact(line),
+                        "dir": repo_name(where),
+                        "session_id": session_id,
+                    },
+                )
 
 
 if __name__ == "__main__":
