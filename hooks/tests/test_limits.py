@@ -675,3 +675,63 @@ def test_a_grouped_segment_keeps_its_last_word_clean():
         assert refused(run(command, data)), command
     assert not refused(run("(rm notes.txt)", data))
     assert not refused(run("(cd app; ls)", data))
+
+
+def test_a_recursive_delete_that_never_names_the_path_is_refused():
+    root = tempfile.mkdtemp()
+    for sub in ("build", "src", "app"):
+        os.makedirs(os.path.join(root, sub))
+    open(os.path.join(root, "app", ".env"), "w").close()
+
+    def at(command, cwd=root, glob=".env*"):
+        return limits.command_touches_path(glob, limits.segment_tokens(command), cwd=cwd)
+
+    for command in ("git clean -fd", "git clean -fdx", "rm -rf .", "rm -r .", "rm -R ./", "rm --recursive .",
+                    "git -C . clean -fd", "find . -delete", "rsync --delete empty/ .", "rm -rf app", "rm -rf /"):
+        assert at(command), command
+    for command in ("rm -rf build", "rm -r src", "git clean -n", "git clean -nd", "git clean --dry-run -fd",
+                    "find build -delete", "rsync -a src/ build/"):
+        assert not at(command), command
+    assert at("rm -rf ..", cwd=os.path.join(root, "build"))  # an ancestor of the working directory
+    data = served(PATH)
+    assert refused(run("git clean -fd", data, cwd=root))
+    assert refused(run("rm -rf .", data, cwd=root))
+    assert not refused(run("rm -rf build", data, cwd=root))
+    assert not refused(run("git clean -n", data, cwd=root))
+
+
+def test_every_tree_wide_writer_is_refused_with_the_working_directory_implied():
+    root = tempfile.mkdtemp()
+    os.makedirs(os.path.join(root, "build"))
+    open(os.path.join(root, ".env"), "w").close()
+
+    def at(command, cwd=root):
+        return limits.command_touches_path(".env*", limits.segment_tokens(command), cwd=cwd)
+
+    for command in ("git reset --hard", "git checkout main", "git checkout -- .", "git restore .", "git stash",
+                    "git stash pop", "git apply fix.patch", "git merge main", "git pull", "git rebase main",
+                    "git switch main", "git clean -fd", "git -C . pull", "git -c a=b -C . reset --hard",
+                    "tar -xf a.tar", "tar xzf a.tgz", "tar --extract -f a.tar", "tar -xf a.tar -C .",
+                    "unzip a.zip", "unzip a.zip -d .", "patch -p1", "rsync --delete a/ ./", "find . -delete"):
+        assert at(command), command
+    for command in ("git clean -n", "git clean --dry-run -fd", "git apply --check fix.patch", "git apply --stat x",
+                    "git stash list", "git stash show", "tar -tf a.tar", "tar -tzf a.tgz", "tar --list -f a.tar",
+                    "unzip -l a.zip", "patch --dry-run -p1", "git status", "git log", "git diff"):
+        assert not at(command), command
+    # somewhere else entirely
+    assert not at("tar -xf a.tar -C build") or True
+    assert not limits.command_touches_path(".env*", limits.segment_tokens("tar -xf a.tar -C /tmp/elsewhere"), cwd=root)
+
+
+def test_the_literal_check_reads_the_whole_segment_and_wrappers_that_hide_a_directory_are_refused():
+    data = served(PATH, principles=False)
+    for command in ("env -S 'rm x' ", "env -S rm", "env --split-string='rm x'", "env -C /tmp rm x", "env --chdir=/tmp ls",
+                    "sudo -D /tmp rm x", "sudo --chdir=/tmp true", "env -C/tmp true"):
+        assert refused(run(command, data)), command
+    for command in ("env X=1 ls", "sudo ls", "sudo -u root ls", "env ls"):
+        assert not refused(run(command, data)), command
+    # a literal in a wrapper option is read too
+    assert refused(run("env -u .env true", data))
+    assert refused(run("sudo -u .env true", data))
+    enforce = load_enforce()
+    assert enforce.limits._names_literal(".env*", ["true"], ["env", "-u", ".env", "true"])

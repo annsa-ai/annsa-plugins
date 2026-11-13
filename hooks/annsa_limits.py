@@ -358,7 +358,9 @@ def command_path_targets(tokens: Sequence[str]) -> List[tuple]:
     return out
 
 
-def command_touches_path(glob: str, tokens: Sequence[str], cwd: Optional[str] = None) -> bool:
+def command_touches_path(
+    glob: str, tokens: Sequence[str], cwd: Optional[str] = None, original: Optional[Sequence[str]] = None
+) -> bool:
     """Does one command segment write to the limit's path? `cwd` is where it runs,
     when the caller knows: a recursive write onto a folder above it counts. Anything
     the check can't evaluate, including an error inside it, counts as touching: a
@@ -369,7 +371,7 @@ def command_touches_path(glob: str, tokens: Sequence[str], cwd: Optional[str] = 
             for op, rec in command_path_targets(tokens)
         ):
             return True
-        return _names_literal(glob, tokens)
+        return _names_literal(glob, tokens, original) or _deletes_the_path(glob, tokens, cwd)
     except Exception:  # fail closed
         return True
 
@@ -379,11 +381,142 @@ def _literal_parts(glob: str) -> List[str]:
     return [run for run in re.split(r"[*?/]+", glob.lower()) if len(run) >= 2]
 
 
-def _names_literal(glob: str, tokens: Sequence[str]) -> bool:
+def _names_literal(glob: str, tokens: Sequence[str], original: Optional[Sequence[str]] = None) -> bool:
     """Does a segment that is not a bare read-only program name a literal part of the path
     anywhere (a flag value, `-so.env`, `--out=.env`, a script argument)?"""
     words = [_dequote(t) for t in tokens if t not in _REDIRECTS and t != ">&"]
     if not words or words[0] is None or words[0] in _READ_ONLY:
         return False
-    text = " ".join(w for w in words if w).lower()
+    # The whole segment as written, wrapper options included (`env -C dir`, `sudo -u x`).
+    every = [_dequote(t) for t in (original if original is not None else tokens)]
+    text = " ".join(w if w is not None else t for w, t in zip(every, original if original is not None else tokens)).lower()
     return any(part in text for part in _literal_parts(glob))
+
+
+# --- a recursive delete that never names the path (`git clean -fd`, `rm -rf .`) ----------------
+
+_RECURSIVE_RM = re.compile(r"^-[A-Za-z]*[rR][A-Za-z]*$")
+_GIT_VALUE_OPTIONS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
+_SCAN_LIMIT = 5000
+
+
+_GIT_TREE_WRITERS = {"reset", "checkout", "restore", "stash", "apply", "merge", "pull", "rebase", "switch", "clean"}
+_READ_FLAGS = {"-n", "--dry-run", "--check", "--stat", "--numstat", "--summary"}
+
+
+def _git_parts(rest: List[str]):
+    """(subcommand, its arguments, the -C directories) of git's arguments, global options skipped."""
+    i, dirs = 0, []
+    while i < len(rest):
+        if rest[i] in _GIT_VALUE_OPTIONS:
+            if rest[i] == "-C" and i + 1 < len(rest):
+                dirs.append(rest[i + 1])
+            i += 2
+        elif rest[i].startswith("-"):
+            i += 1
+        else:
+            break
+    return (rest[i] if i < len(rest) else None), rest[i + 1 :], dirs
+
+
+def _delete_operands(words: Sequence[str]) -> Optional[List[str]]:
+    """The folders a tree-wide writer would rewrite (the working directory when none is
+    named), or None when the segment is not one. Covers rm -r/-R/--recursive, find -delete,
+    rsync --delete, git reset/checkout/restore/stash/apply/merge/pull/rebase/switch/clean,
+    tar -x, unzip and patch; a dry run or a read-only flag (git clean -n, git apply --check,
+    tar -t, unzip -l) is not one."""
+    head, rest = posixpath.basename(words[0]), list(words[1:])
+    flags = [x for x in rest if x.startswith("-")]
+    plain = [x for x in rest if not x.startswith("-")]
+    if head == "rm" and any(_RECURSIVE_RM.match(f) or f == "--recursive" for f in flags):
+        return plain
+    if head == "git":
+        sub, after, dirs = _git_parts(rest)
+        if sub not in _GIT_TREE_WRITERS:
+            return None
+        if sub == "stash" and after[:1] in (["list"], ["show"]):
+            return None
+        short = [f for f in after if f.startswith("-") and not f.startswith("--")]
+        if any(f in _READ_FLAGS for f in after) or (
+            sub == "clean" and any("n" in f[1:] for f in short)
+        ):
+            return None
+        where = "."
+        for d in dirs:
+            where = posixpath.join(where, d)
+        return [where]
+    if head == "find" and "-delete" in rest:
+        starts = []
+        for x in rest:
+            if x.startswith(("-", "(", "!")):
+                break
+            starts.append(x)
+        return starts
+    if head == "rsync" and any(f.startswith("--delete") for f in flags):
+        return plain
+    if head == "tar":
+        first = rest[0] if rest else ""
+        listing = any(f in ("--list", "--test-label") for f in flags) or any(
+            re.fullmatch(r"-[A-Za-z]*t[A-Za-z]*", f) for f in flags
+        ) or bool(re.fullmatch(r"[A-Za-z]*t[A-Za-z]*", first))
+        extracting = any(f in ("--extract", "--get") for f in flags) or any(
+            re.fullmatch(r"-[A-Za-z]*x[A-Za-z]*", f) for f in flags if not f.startswith("--")
+        ) or bool(re.fullmatch(r"[A-Za-z]*x[A-Za-z]*", first))
+        if listing or not extracting:
+            return None
+        dirs = [rest[i + 1] for i, x in enumerate(rest) if x in ("-C", "--directory") and i + 1 < len(rest)]
+        dirs += [x.split("=", 1)[1] for x in flags if x.startswith("--directory=")]
+        return dirs or ["."]
+    if head == "unzip":
+        if any(f in ("-l", "-t", "-v", "-z") for f in flags):
+            return None
+        dirs = [rest[i + 1] for i, x in enumerate(rest) if x == "-d" and i + 1 < len(rest)]
+        return dirs or ["."]
+    if head == "patch":
+        if any(f in ("--dry-run",) for f in flags):
+            return None
+        dirs = [rest[i + 1] for i, x in enumerate(rest) if x in ("-d", "--directory") and i + 1 < len(rest)]
+        return dirs or ["."]
+    return None
+
+
+def _deletes_the_path(glob: str, tokens: Sequence[str], cwd: Optional[str]) -> bool:
+    """A recursive delete that empties a folder holding the limit's path, whether or not it
+    names the path. Each operand is placed under the working directory; it counts when it is
+    the path, an ancestor of it (a relative glob is read from the working directory), or a
+    folder that holds something on disk the glob matches."""
+    words = [_dequote(t) for t in tokens if t not in _REDIRECTS and t != ">&"]
+    if not words or any(w is None for w in words):
+        return False
+    operands = _delete_operands([str(w) for w in words])
+    if operands is None:
+        return False
+    here = posixpath.normpath((cwd or os.getcwd()).lower())
+    glob = glob.lower()
+    g_abs = _segments(glob if glob.startswith("/") else here + "/" + glob)
+    for op in operands or ["."]:
+        op = op.lower()
+        if op.startswith("~"):
+            op = _home().lower() + op[1:]
+        placed = posixpath.normpath(posixpath.join(here, op))
+        if _aligned(g_abs, _segments(placed)) or _holds_a_match(glob, placed, here):
+            return True
+    return False
+
+
+def _holds_a_match(glob: str, folder: str, here: str) -> bool:
+    """Is there, under `folder` on disk, an entry the glob matches? Bounded: a folder too
+    big to scan counts as holding one (fail closed)."""
+    if not os.path.isdir(folder):
+        return False
+    seen = 0
+    for root, dirs, files in os.walk(folder):
+        for name in dirs + files:
+            seen += 1
+            if seen > _SCAN_LIMIT:
+                return True
+            entry = posixpath.join(root, name).lower()
+            rel = posixpath.relpath(entry, here) if entry.startswith(here.rstrip("/") + "/") else entry
+            if path_matches(glob, rel):
+                return True
+    return False

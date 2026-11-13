@@ -385,6 +385,10 @@ def segment_entries(command, issues, depth=0):
         before = list(words)
         words, via_xargs = strip_prefix(words)
         if not words:
+            if before and limits:  # `env -S 'cmd'`: the wrapper ate the command; a path limit still sees it
+                every = limits.segment_tokens(part.lstrip("({ "))
+                out.append({"words": [os.path.basename(before[0])], "before": before, "tokens": [],
+                            "every": every, "xargs": False})
             continue
         head = words[0]
         if DYNAMIC_RE.search(head):
@@ -401,8 +405,10 @@ def segment_entries(command, issues, depth=0):
         if head == "eval":
             out.extend(segment_entries(" ".join(words[1:]), issues, depth + 1))
             continue
-        tokens = strip_prefix_tokens(limits.segment_tokens(part.lstrip("({ "))) if limits else []
-        out.append({"words": words, "before": before, "tokens": tokens, "xargs": via_xargs})
+        every = limits.segment_tokens(part.lstrip("({ ")) if limits else []
+        tokens = strip_prefix_tokens(every) if limits else []
+        out.append({"words": words, "before": before, "tokens": tokens, "every": every,
+                    "xargs": via_xargs})
     return out
 
 
@@ -443,7 +449,8 @@ def with_dirs_full(command, cwd, issues=None):
         ):
             issues.append("arguments that arrive on stdin")
         pairs.append({"line": " ".join(words), "where": where, "words": words, "as_run": as_run,
-                      "before": entry["before"], "tokens": entry["tokens"], "xargs": piped})
+                      "before": entry["before"], "tokens": entry["tokens"], "every": entry["every"],
+                      "xargs": piped})
     return pairs
 
 
@@ -593,6 +600,25 @@ def usable_limits(data):
     return out
 
 
+WRAPPER_DIR_OPTIONS = {"env": ("-S", "-C", "--split-string", "--chdir"), "sudo": ("-D", "--chdir")}
+
+
+def wrapper_hides_dir(entry):
+    """`env -S` splits a string into a command the parser never sees, and `env -C` or
+    `sudo -D` runs the command somewhere else: a path limit refuses a segment that has one."""
+    before, words = entry["before"], entry["words"]
+    prefix = before[: max(len(before) - len(words) + 1, 0)]
+    names = [os.path.basename(w) for w in prefix]
+    for wrapper, options in WRAPPER_DIR_OPTIONS.items():
+        if wrapper not in names:
+            continue
+        for w in prefix:
+            for o in options:
+                if w == o or w.startswith(o + "=") or (len(o) == 2 and w.startswith(o) and w != o):
+                    return True
+    return False
+
+
 def limit_what(limit, why=None):
     return {"what": why or "a limit your workspace set (%s)" % limit["reason"]}
 
@@ -622,7 +648,8 @@ def limit_hit(command, cwd, data):
                     if e["xargs"] and e["words"][0] not in limits._READ_ONLY:
                         hit = limit_could_apply(limit, command)  # its operands arrive on stdin
                     else:
-                        hit = limits.command_touches_path(limit["pattern"], e["tokens"], cwd=e["where"])
+                        hit = wrapper_hides_dir(e) or limits.command_touches_path(
+                            limit["pattern"], e["tokens"], cwd=e["where"], original=e["every"])
                 if hit:
                     return _limit_result(limit, e["line"], e["where"])
         if issues:
