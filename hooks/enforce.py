@@ -20,7 +20,14 @@ import sys
 import time
 from urllib.parse import urlsplit
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    import annsa_limits as limits  # the matchers for a workspace's own limits (1.2.0)
+except Exception:  # a missing or broken file must not break a command: no limits then
+    limits = None
+
 HOME = os.path.expanduser("~/.annsa")
+HOOK_VERSION = "2"  # sent as X-Annsa-Hook-Version: from 2 on, the server serves `limits` to this hook
 FRESH_SECONDS = 300
 STALE_LIMIT_SECONDS = 24 * 3600
 FETCH_TIMEOUT = 1.5
@@ -87,7 +94,8 @@ def config():
 
 
 def cache_path(cfg):
-    key = hashlib.sha256(f"{cfg['api']}|{cfg['token']}".encode()).hexdigest()[:16]
+    # `|hook2`: a list cached by 1.1.0 holds no limits and must not answer a version-2 hook.
+    key = hashlib.sha256(f"{cfg['api']}|{cfg['token']}|hook{HOOK_VERSION}".encode()).hexdigest()[:16]
     return os.path.join(HOME, f"enforce-{key}.json")
 
 
@@ -102,6 +110,7 @@ def fetch(cfg, etag=None):
     req = urllib.request.Request(cfg["api"] + "/mcp/enforce")
     req.add_header("Authorization", "Bearer " + cfg["token"])
     req.add_header("Accept", "application/json")
+    req.add_header("X-Annsa-Hook-Version", HOOK_VERSION)
     if etag:
         req.add_header("If-None-Match", etag)
     try:
@@ -322,15 +331,45 @@ def runs_inline_code(head, words):
     return any(w in flags or (head in ("perl", "ruby") and re.match(r"^-[A-Za-z]*e$", w)) for w in words[1:])
 
 
-def segments(command, issues, depth=0):
-    """Every simple command inside `command`, followed into bash -c, eval, $( ) and
-    backticks. Anything that can't be followed is noted in `issues`."""
+def strip_prefix_tokens(tokens):
+    """The raw tokens of one segment with the same prefix dropped that strip_prefix drops
+    from its words, so a path limit reads `rm .env` behind `sudo`, `env X=1`, a redirect
+    (`2>/dev/null rm .env`). Redirects and their targets are set aside
+    first and kept at the end, where the path check still reads them. A trailing `)` of a
+    `( ... )` group is not part of the last word."""
+    tokens = list(tokens)
+    while tokens and ")" in tokens[-1][-1:] and not any(q in tokens[-1] for q in "'\""):
+        tokens[-1] = tokens[-1].rstrip(")")
+        if not tokens[-1]:
+            tokens.pop()
+    body, redirects, i = [], [], 0
+    while i < len(tokens):
+        if tokens[i] in limits._REDIRECTS or tokens[i] == ">&":
+            redirects += tokens[i : i + 2]
+            i += 2
+        else:
+            body.append(tokens[i])
+            i += 1
+    plain = []
+    for t in body:
+        d = limits._dequote(t)
+        plain.append(t if d is None else d)
+    rest, _ = strip_prefix(plain)
+    kept = body[len(body) - len(rest):] if rest else []
+    return kept + redirects  # the head stays as written: `/usr/bin/cat` is not a bare `cat`
+
+
+def segment_entries(command, issues, depth=0):
+    """Every simple command inside `command` as {words, before, tokens, xargs}: `words`
+    after wrappers are stripped, `before` as written, `tokens` the quote-aware tokens a path
+    limit reads. Followed into bash -c, eval, $( ) and backticks. Anything that can't be
+    followed is noted in `issues`."""
     out = []
     if depth >= MAX_DEPTH:
         issues.append("too deeply nested")
         return out
     for inner in substitutions(command):
-        out.extend(segments(inner, issues, depth + 1))
+        out.extend(segment_entries(inner, issues, depth + 1))
     for part in split_outside_quotes(command):
         part = part.strip()
         if not part:
@@ -343,8 +382,13 @@ def segments(command, issues, depth=0):
             issues.append("unbalanced quote")
         if grouped and words:
             words[-1] = words[-1].rstrip(")")
+        before = list(words)
         words, via_xargs = strip_prefix(words)
         if not words:
+            if before and limits:  # `env -S 'cmd'`: the wrapper ate the command; a path limit still sees it
+                every = limits.segment_tokens(part.lstrip("({ "))
+                out.append({"words": [os.path.basename(before[0])], "before": before, "tokens": [],
+                            "every": every, "xargs": False})
             continue
         head = words[0]
         if DYNAMIC_RE.search(head):
@@ -354,32 +398,38 @@ def segments(command, issues, depth=0):
             flag = next((i for i, w in enumerate(words[1:], 1)
                          if re.match(r"^-[A-Za-z]*c[A-Za-z]*$", w)), None)
             if flag is not None and flag + 1 < len(words):
-                out.extend(segments(words[flag + 1], issues, depth + 1))
+                out.extend(segment_entries(words[flag + 1], issues, depth + 1))
                 continue
         if runs_inline_code(head, words):
             issues.append("an interpreter running inline code")
         if head == "eval":
-            out.extend(segments(" ".join(words[1:]), issues, depth + 1))
+            out.extend(segment_entries(" ".join(words[1:]), issues, depth + 1))
             continue
-        if via_xargs:
-            words = ["xargs:"] + words  # marker: its last arguments arrive on stdin
-        out.append(words)
+        every = limits.segment_tokens(part.lstrip("({ ")) if limits else []
+        tokens = strip_prefix_tokens(every) if limits else []
+        out.append({"words": words, "before": before, "tokens": tokens, "every": every,
+                    "xargs": via_xargs})
     return out
 
 
 def with_dirs(command, cwd, issues=None):
     """Pair each segment with the directory it acts in, following cd and git -C."""
+    return [(e["line"], e["where"]) for e in with_dirs_full(command, cwd, issues)]
+
+
+def with_dirs_full(command, cwd, issues=None):
+    """Each segment with the directory it acts in, following cd and git -C: {line, where,
+    words, before, tokens, xargs} (the first two are what with_dirs returns)."""
     issues = [] if issues is None else issues
     here = cwd or os.getcwd()
     pairs = []
-    for words in segments(command, issues):
-        piped = words[0] == "xargs:"
-        if piped:
-            words = words[1:]
+    for entry in segment_entries(command, issues):
+        words, piped = entry["words"], entry["xargs"]
         if words[0] in ("cd", "pushd") and len(words) > 1:
             here = os.path.normpath(os.path.join(here, os.path.expanduser(words[1])))
             continue
         where = here
+        as_run = list(words)
         if words[0] == "git":
             rest, i = [], 1
             while i < len(words):
@@ -398,7 +448,9 @@ def with_dirs(command, cwd, issues=None):
             words[0] == "rm" and not any(w.startswith("-") for w in words[1:])
         ):
             issues.append("arguments that arrive on stdin")
-        pairs.append((" ".join(words), where))
+        pairs.append({"line": " ".join(words), "where": where, "words": words, "as_run": as_run,
+                      "before": entry["before"], "tokens": entry["tokens"], "every": entry["every"],
+                      "xargs": piped})
     return pairs
 
 
@@ -506,6 +558,124 @@ def first_block(command, cwd, data):
         why = {"what": "a command Annsa can't read (%s)" % issues[0]}
         return principles[0], why, command[:200], os.getcwd() if not cwd else cwd
     return None
+
+
+# ---------- a workspace's own limits (GET /mcp/enforce `limits`, 1.2.0) ----------
+
+CUSTOM_KIND_RE = re.compile(r"^custom:[0-9a-f]{12}$")
+LITERAL_RUN_RE = re.compile(r"[^*?/\s]{2,}")
+
+
+def usable_limits(data):
+    """The limits this hook enforces: switched on, type command or path, a grammar it reads.
+    An import limit is a lint rule for the agent, never the shell hook. A reply with no
+    `limits` (an older server) gives none, and the hook behaves as 1.1.0 did."""
+    out = []
+    listed = data.get("limits") if limits else None
+    if not isinstance(listed, list):
+        return out
+    for item in listed:
+        if not isinstance(item, dict) or item.get("state") != "on":
+            continue
+        kind_of, pattern, key = item.get("type"), item.get("pattern"), item.get("key")
+        if kind_of not in ("command", "path") or not isinstance(pattern, str):
+            continue
+        grammar = limits.COMMAND_GRAMMAR if kind_of == "command" else limits.PATH_GRAMMAR
+        if item.get("match") not in (None, grammar):
+            continue  # a grammar this hook doesn't know: it can't be read
+        pattern = " ".join(pattern.split()) if kind_of == "command" else pattern.strip()
+        if not pattern or len(pattern) > limits.MAX_PATTERN or len(pattern.split()) > limits.MAX_WORDS:
+            continue
+        if sum(c not in "*?/ " for c in pattern) < 2:
+            continue  # nothing named: it would match everything
+        kind = item.get("kind")
+        if not (isinstance(kind, str) and CUSTOM_KIND_RE.match(kind)):
+            kind = "custom:" + key if isinstance(key, str) and re.fullmatch(r"[0-9a-f]{12}", key) else None
+        if not kind:
+            continue
+        reason = " ".join(str(item.get("reason") or "").split())[:200]
+        out.append({"type": kind_of, "pattern": pattern, "kind": kind, "reason": reason,
+                    "principle_id": item.get("principle_id"), "number": item.get("number"),
+                    "title": item.get("title") or "your principle"})
+    return out
+
+
+WRAPPER_DIR_OPTIONS = {"env": ("-S", "-C", "--split-string", "--chdir"), "sudo": ("-D", "--chdir")}
+#: The short letters among those, checked inside a bundle (`env -iC dir`, `sudo -uxD`).
+WRAPPER_DIR_LETTERS = {"env": set("SC"), "sudo": set("D")}
+
+
+def wrapper_hides_dir(entry):
+    """`env -S` splits a string into a command the parser never sees, and `env -C` or
+    `sudo -D` runs the command somewhere else: a path limit refuses a segment that has one."""
+    before, words = entry["before"], entry["words"]
+    prefix = before[: max(len(before) - len(words) + 1, 0)]
+    names = [os.path.basename(w) for w in prefix]
+    for wrapper, options in WRAPPER_DIR_OPTIONS.items():
+        if wrapper not in names:
+            continue
+        longs = [o for o in options if o.startswith("--")]
+        for w in prefix:
+            if w.startswith("--"):
+                name = w.split("=", 1)[0]
+                # getopt takes any unambiguous prefix: `--ch` is --chdir.
+                if len(name) >= 4 and any(o.startswith(name) for o in longs):
+                    return True
+            elif w.startswith("-") and len(w) > 1:
+                if WRAPPER_DIR_LETTERS[wrapper] & set(w[1:]):
+                    return True
+    return False
+
+
+def limit_what(limit, why=None):
+    return {"what": why or "a limit your workspace set (%s)" % limit["reason"]}
+
+
+def limit_could_apply(limit, command):
+    """For a command the parser can't fully read: does it name something the limit names?"""
+    text = command.lower()
+    return any(run.lower() in text for run in LITERAL_RUN_RE.findall(limit["pattern"]))
+
+
+def limit_hit(command, cwd, data):
+    """(principle, kind, line, where, limit) for the first segment a switched-on command or
+    path limit refuses, or None. Fails closed: a segment it can't read that a limit could
+    apply to is refused, and so is an error inside the check."""
+    active = usable_limits(data)
+    if not active:
+        return None
+    here = os.getcwd() if not cwd else cwd
+    try:
+        issues = []
+        for e in with_dirs_full(command, cwd, issues):
+            for limit in active:
+                if limit["type"] == "command":
+                    tries = (e["before"], e["as_run"], e["words"])
+                    hit = any(limits.command_matches(limit["pattern"], w) for w in tries if w)
+                else:
+                    if e["xargs"] and e["words"][0] not in limits._READ_ONLY:
+                        hit = limit_could_apply(limit, command)  # its operands arrive on stdin
+                    else:
+                        hit = wrapper_hides_dir(e) or limits.command_touches_path(
+                            limit["pattern"], e["tokens"], cwd=e["where"], original=e["every"])
+                if hit:
+                    return _limit_result(limit, e["line"], e["where"])
+        if issues:
+            for limit in active:
+                if limit_could_apply(limit, command):
+                    why = "a command Annsa can't read (%s), under a limit your workspace set (%s)" % (
+                        issues[0], limit["reason"])
+                    return _limit_result(limit, command[:200], here, why)
+    except Exception:  # a limit never fails open
+        limit = active[0]
+        return _limit_result(limit, command[:200], here, "a command Annsa couldn't check against your limits", post=False)
+    return None
+
+
+def _limit_result(limit, line, where, why=None, post=True):
+    principle = {"principle_id": limit["principle_id"], "number": limit["number"],
+                 "title": limit["title"], "kind": limit["kind"]}
+    return principle, limit_what(limit, why), line, where, post
 
 
 # ---------- telling Annsa, telling the person ----------
@@ -643,12 +813,17 @@ def main():
     if data is None:
         once(session_id, "offline", "Annsa can't be reached, so your principles aren't enforced in this session.")
         return
+    post = True
     hit = first_block(command, event.get("cwd"), data) if data.get("principles") else None
+    if not hit:
+        hit = limit_hit(command, event.get("cwd"), data)
+        if hit:
+            hit, post = hit[:4], hit[4]
     if not hit:
         return
     principle, kind, line, where = hit
     deny(principle, kind, line)
-    if not os.environ.get("ANNSA_ENFORCE_NO_POST"):
+    if post and not os.environ.get("ANNSA_ENFORCE_NO_POST"):
         post_block(
             cfg,
             {
