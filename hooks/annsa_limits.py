@@ -12,6 +12,12 @@ Two grammars, neither a regex, both linear in pattern length times input length:
 
 This stops an honest mistake. It is not a sandbox: a script, a variable or an encoded path gets past it.
 Stdlib only.
+
+Hardening beyond the server's matcher (1.2.0, from the security review of PR #7; worth porting
+back to principle_limits.py): a relative operand is also tried against the working directory
+(`cd backend/migrations && rm x`); more writers (sed/perl --in-place, curl -o, wget -O,
+git reset/clean/stash/apply, tar -x, unzip, patch, shred); and a command whose program is not
+known to be read-only is refused when it names a literal part of the limit's glob.
 """
 
 from __future__ import annotations
@@ -234,6 +240,13 @@ def path_touched(
         return True
     if path_matches(glob, op):
         return True
+    if cwd and not op.startswith("/"):
+        # The same operand placed under where the command runs: `cd backend/migrations && rm x`.
+        placed = posixpath.normpath(posixpath.join(cwd.lower(), op))
+        if path_matches(glob, placed) or (
+            any(c in op for c in _SHELL_GLOB) and _overlaps(glob, placed, anywhere=True)
+        ):
+            return True
     if any(c in op for c in _SHELL_GLOB):
         return _overlaps(glob, op, anywhere=True)
     return recursive and _overlaps(glob, op, anywhere=False)
@@ -256,7 +269,15 @@ _WRITERS = {
     "dd",
     "mkdir",
 }
-_GIT_WRITERS = {"rm", "mv", "restore", "checkout"}
+_GIT_WRITERS = {"rm", "mv", "restore", "checkout", "reset", "clean", "stash", "apply"}
+#: Programs whose whole segment is read-only or handled above: anything else is "unknown"
+#: and is refused when it names a literal part of the limit's path.
+_KNOWN = (
+    {"cat", "ls", "grep", "egrep", "head", "tail", "wc", "stat", "echo", "pwd", "test", "[", "true",
+     "false", "cd", "pushd", "popd", "which", "type", "file", "diff", "sort", "uniq", "cut", "tr",
+     "du", "df", "ps", "date", "whoami", "basename", "dirname", "realpath", "readlink", "printf",
+     "jq", "rg", "tree", "git", "sed", "perl", "curl", "wget", "tar", "unzip", "patch", "shred", "gh"}
+)
 _REDIRECTS = {">", ">>", "&>", "&>>", ">|"}
 _RECURSIVE_FLAG = re.compile(r"^-[A-Za-z]*[rRa][A-Za-z]*$")
 
@@ -359,10 +380,23 @@ def command_path_targets(tokens: Sequence[str]) -> List[tuple]:
         return out  # only redirects, such as `> .env`: their targets are already collected
     head, rest = str(words[0]), [str(x) for x in words[1:]]
     git_sub = None
-    if head == "git" and rest and rest[0] in _GIT_WRITERS:
+    if head == "git":
+        if not rest or rest[0] not in _GIT_WRITERS:
+            return out
         git_sub, rest = rest[0], rest[1:]
-    elif head in ("sed", "perl") and any(re.fullmatch(r"-[A-Za-z]*i\S*", x) for x in rest):
-        pass
+    elif head in ("sed", "perl"):
+        if not any(re.fullmatch(r"-[A-Za-z]*i\S*", x) or x.startswith("--in-place") for x in rest):
+            return out
+    elif head == "curl":
+        return out + _curl_targets(rest)
+    elif head == "wget":
+        return out + _wget_targets(rest)
+    elif head == "tar":
+        return out + _tar_targets(rest)
+    elif head == "unzip":
+        return out + _unzip_targets(rest)
+    elif head == "patch":
+        return out + [(".", True)]  # it writes whatever files the patch names
     elif head not in _WRITERS:
         return out
     flags = [x for x in rest if x.startswith("-")]
@@ -370,6 +404,8 @@ def command_path_targets(tokens: Sequence[str]) -> List[tuple]:
         x.split("=", 1)[1] if x.startswith("of=") else x for x in rest if not x.startswith("-")
     ]
     recursive = any(_RECURSIVE_FLAG.match(f) or f == "--recursive" for f in flags)
+    if git_sub in ("reset", "clean", "stash", "apply"):
+        return out + _git_tree_targets(git_sub, flags, operands)
     if head == "mv" or git_sub in ("restore", "checkout"):
         out += [(x, True) for x in operands]
     elif head == "rsync":
@@ -382,6 +418,67 @@ def command_path_targets(tokens: Sequence[str]) -> List[tuple]:
     return out
 
 
+def _git_tree_targets(sub: str, flags: List[str], operands: List[str]) -> List[tuple]:
+    """git commands that rewrite the working tree: the whole tree counts, unless it is a dry run."""
+    if sub == "reset":
+        return [(".", True)] if any(f in ("--hard", "--merge", "--keep") for f in flags) else []
+    if sub == "clean":
+        dry = any(f in ("-n", "--dry-run") or re.fullmatch(r"-[A-Za-z]*n[A-Za-z]*", f) for f in flags)
+        return [] if dry else [(".", True)]
+    if sub == "apply":
+        return [] if any(f in ("--check", "--stat", "--numstat", "--summary") for f in flags) else [(".", True)]
+    return [(".", True)]  # stash
+
+
+def _value_after(rest: List[str], short: Sequence[str], long: Sequence[str]) -> List[str]:
+    """The values of `-o x`, `-ox`, `--output x` and `--output=x`."""
+    found = []
+    for i, x in enumerate(rest):
+        if x in short or x in long:
+            if i + 1 < len(rest):
+                found.append(rest[i + 1])
+        elif any(x.startswith(f + "=") for f in long):
+            found.append(x.split("=", 1)[1])
+        elif any(len(f) == 2 and x.startswith(f) and len(x) > 2 for f in short):
+            found.append(x[2:])
+    return found
+
+
+def _curl_targets(rest: List[str]) -> List[tuple]:
+    named = _value_after(rest, ["-o"], ["--output"])
+    urls = [x for x in rest if not x.startswith("-") and x not in named]
+    saved = [u.split("?")[0].rstrip("/").rsplit("/", 1)[-1] for u in urls] if any(
+        x in ("-O", "--remote-name") for x in rest
+    ) else []
+    return [(x, False) for x in named + [n for n in saved if n]]
+
+
+def _wget_targets(rest: List[str]) -> List[tuple]:
+    named = _value_after(rest, ["-O"], ["--output-document"])
+    if named:
+        return [(x, False) for x in named]
+    urls = [x for x in rest if not x.startswith("-")]
+    return [(u.split("?")[0].rstrip("/").rsplit("/", 1)[-1], False) for u in urls]
+
+
+def _tar_targets(rest: List[str]) -> List[tuple]:
+    first = rest[0] if rest else ""
+    extracting = any(x == "--extract" or x == "--get" for x in rest) or any(
+        re.fullmatch(r"-[A-Za-z]*x[A-Za-z]*", x) for x in rest if not x.startswith("--")
+    ) or bool(re.fullmatch(r"[A-Za-z]*x[A-Za-z]*", first))
+    if not extracting:
+        return []
+    dirs = _value_after(rest, ["-C"], ["--directory"])
+    return [(d, True) for d in dirs] or [(".", True)]
+
+
+def _unzip_targets(rest: List[str]) -> List[tuple]:
+    if any(x in ("-l", "-t", "-v", "-z") for x in rest):
+        return []
+    dirs = [rest[i + 1] for i, x in enumerate(rest) if x == "-d" and i + 1 < len(rest)]
+    return [(d, True) for d in dirs] or [(".", True)]
+
+
 def command_path_operands(tokens: Sequence[str]) -> List[str]:
     return [op for op, _ in command_path_targets(tokens)]
 
@@ -392,9 +489,29 @@ def command_touches_path(glob: str, tokens: Sequence[str], cwd: Optional[str] = 
     the check can't evaluate, including an error inside it, counts as touching: a
     limit never fails open."""
     try:
-        return any(
+        if any(
             path_touched(glob, op, recursive=rec, cwd=cwd)
             for op, rec in command_path_targets(tokens)
-        )
+        ):
+            return True
+        return _unknown_program_names_path(glob, tokens)
     except Exception:  # fail closed
         return True
+
+
+def _literal_parts(glob: str) -> List[str]:
+    """The literal runs of a path glob: `backend/migrations/001*` gives backend, migrations, 001."""
+    return [run for run in re.split(r"[*?/]+", glob.lower()) if len(run) >= 2]
+
+
+def _unknown_program_names_path(glob: str, tokens: Sequence[str]) -> bool:
+    """A program that is not known to be read-only (a script, a build tool, `python x.py`) can
+    write anywhere, so it is refused when its command line names a literal part of the path."""
+    words = [_dequote(t) for t in tokens if t not in _REDIRECTS and t != ">&"]
+    if not words or words[0] is None:
+        return False  # unreadable words are refused by command_path_targets already
+    head = posixpath.basename(words[0])
+    if head in _KNOWN or head in _WRITERS or head in _READ_ONLY:
+        return False
+    text = " ".join(w for w in words if w).lower()
+    return any(part in text for part in _literal_parts(glob))

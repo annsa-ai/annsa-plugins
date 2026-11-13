@@ -613,3 +613,71 @@ def test_the_gemini_manifest_carries_the_same_version():
                 ("gemini-extension.json", ".claude-plugin/plugin.json", ".cursor-plugin/plugin.json",
                  ".codex-plugin/plugin.json", ".grok-plugin/plugin.json")}
     assert versions == {"1.2.0"}
+
+
+# --- security review of PR #7: four mediums --------------------------------------------
+
+G = "backend/migrations/"
+
+
+def test_git_global_options_do_not_hide_a_writing_subcommand():
+    data = served(limit("path", "backend/migrations/", KEY_PATH))
+    for command in ("git -C . rm backend/migrations/001.sql", "git -c a=b rm backend/migrations/001.sql",
+                    "git --no-pager rm backend/migrations/001.sql", "git --git-dir=.git rm backend/migrations/1.sql",
+                    "git -C /tmp -c x=y --no-pager mv backend/migrations/1.sql x", "sudo git -C . rm backend/migrations/1.sql"):
+        assert refused(run(command, data)), command
+    assert not refused(run("git -C . status", data))
+    assert not refused(run("git --no-pager log", data))
+    enforce = load_enforce()
+    assert enforce.strip_prefix_tokens(["git", "-C", "x", "-c", "a=b", "rm", "f"]) == ["git", "rm", "f"]
+
+
+def test_a_relative_operand_is_also_read_from_the_working_directory():
+    for command, cwd in (("rm 001_x.sql", "/repo/backend/migrations"), ("rm -rf .", "/repo/backend/migrations"),
+                         ("tee out.sql", "/repo/backend/migrations/sub"), ("rm 00*", "/repo/backend/migrations")):
+        assert limits.command_touches_path(G, limits.segment_tokens(command), cwd=cwd), command
+    for command, cwd in (("rm 001_x.sql", "/repo/src"), ("cat 001_x.sql", "/repo/backend/migrations")):
+        assert not limits.command_touches_path(G, limits.segment_tokens(command), cwd=cwd), command
+    assert refused(run("rm 001_x.sql", served(limit("path", G, KEY_PATH)), cwd=tempfile.mkdtemp().rstrip("/") + "/backend/migrations"))
+    cwd = os.path.join(tempfile.mkdtemp(), "backend", "migrations")
+    os.makedirs(cwd)
+    assert refused(run("rm 001_x.sql", served(limit("path", G, KEY_PATH)), cwd=cwd))
+    assert refused(run("cd backend/migrations && rm 001_x.sql", served(limit("path", G, KEY_PATH)), cwd=os.path.dirname(os.path.dirname(cwd))))
+
+
+def test_more_writers_are_found_and_an_unknown_program_that_names_the_path_is_refused():
+    path = ".env*"
+    for command in ("sed --in-place s/a/b/ .env", "sed --in-place=.bak s/a/b/ .env", "perl --in-place -e 1 .env",
+                    "curl -o .env https://x/y", "curl --output .env https://x/y", "curl --output=.env https://x/y",
+                    "curl -O https://x/.env", "wget -O .env https://x/y", "wget https://x/.env",
+                    "git reset --hard", "git clean -fd", "git stash", "git apply fix.patch", "git restore .env",
+                    "tar -xzf a.tgz", "tar xf a.tar", "unzip a.zip",
+                    "patch -p1", "shred -u .env",
+                    "python3 build.py --out .env", "./script.sh .env", "npm run seed -- .env.local"):
+        assert _touches(path, command), command
+    assert _touches(G, "tar -xf a.tar -C backend") and _touches(G, "unzip a.zip -d backend")
+    assert not _touches(G, "tar -xf a.tar -C other")
+    for command in ("git reset", "git reset HEAD file", "git clean -n", "git clean -fdn", "git apply --check x.patch",
+                    "tar -tf a.tar", "tar -czf out.tgz src", "unzip -l a.zip", "curl https://x/y", "wget -O- https://x/y".replace("-O-", "-q"),
+                    "python3 build.py", "npm test", "cat .env", "git status", "sed s/a/b/ .env"):
+        if command.startswith("wget -q"):
+            continue
+        assert not _touches(path, command), command
+
+
+def test_a_redirect_before_a_wrapper_does_not_hide_the_command_and_is_still_checked():
+    data = served(PATH)
+    for command in ("2>/dev/null rm .env", ">/dev/null sudo rm .env", "sudo 2>/dev/null rm .env", "> .env sudo true",
+                    "env X=1 >/dev/null tee .env"):
+        assert refused(run(command, data)), command
+    assert not refused(run("2>/dev/null rm notes.txt", data))
+    assert not refused(run(">/dev/null sudo ls", data))
+
+
+def test_a_grouped_segment_keeps_its_last_word_clean():
+    data = served(PATH)
+    for command in ("(rm .env)", "(cd app; rm .env)", "(echo x > .env)", "(true && rm .env)", "( rm .env )",
+                    "{ rm .env; }", "((rm .env))"):
+        assert refused(run(command, data)), command
+    assert not refused(run("(rm notes.txt)", data))
+    assert not refused(run("(cd app; ls)", data))

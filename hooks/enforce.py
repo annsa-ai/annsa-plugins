@@ -331,16 +331,50 @@ def runs_inline_code(head, words):
     return any(w in flags or (head in ("perl", "ruby") and re.match(r"^-[A-Za-z]*e$", w)) for w in words[1:])
 
 
+def strip_git_global_tokens(tokens):
+    """`git -C dir -c a=b --no-pager rm .env` as `git rm .env`: the options before the
+    subcommand are dropped, as with_dirs drops them from the words."""
+    out, i = [tokens[0]], 1
+    while i < len(tokens):
+        w = limits._dequote(tokens[i]) or ""
+        if w in GIT_GLOBAL_WITH_ARG and i + 1 < len(tokens):
+            i += 2
+        elif w in GIT_GLOBAL_FLAGS or re.match(r"^--(git-dir|work-tree|namespace|exec-path)=", w):
+            i += 1
+        else:
+            break
+    return out + tokens[i:]
+
+
 def strip_prefix_tokens(tokens):
     """The raw tokens of one segment with the same prefix dropped that strip_prefix drops
-    from its words, so a path limit reads `rm .env` behind `sudo` or `env X=1`."""
+    from its words, so a path limit reads `rm .env` behind `sudo`, `env X=1`, a redirect
+    (`2>/dev/null rm .env`) or `git -C dir`. Redirects and their targets are set aside
+    first and kept at the end, where the path check still reads them. A trailing `)` of a
+    `( ... )` group is not part of the last word."""
+    tokens = list(tokens)
+    while tokens and ")" in tokens[-1][-1:] and not any(q in tokens[-1] for q in "'\""):
+        tokens[-1] = tokens[-1].rstrip(")")
+        if not tokens[-1]:
+            tokens.pop()
+    body, redirects, i = [], [], 0
+    while i < len(tokens):
+        if tokens[i] in limits._REDIRECTS or tokens[i] == ">&":
+            redirects += tokens[i : i + 2]
+            i += 2
+        else:
+            body.append(tokens[i])
+            i += 1
     plain = []
-    for t in tokens:
+    for t in body:
         d = limits._dequote(t)
         plain.append(t if d is None else d)
     rest, _ = strip_prefix(plain)
-    kept = tokens[len(tokens) - len(rest):] if rest else []
-    return ([rest[0]] + kept[1:]) if kept else []
+    kept = body[len(body) - len(rest):] if rest else []
+    kept = ([rest[0]] + kept[1:]) if kept else []
+    if kept and kept[0] == "git":
+        kept = strip_git_global_tokens(kept)
+    return kept + redirects
 
 
 def segment_entries(command, issues, depth=0):
