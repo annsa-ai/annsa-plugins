@@ -138,9 +138,6 @@ def test_a_recursive_writer_on_a_folder_holding_the_path_is_refused():
     for fine in (
         "rm -rf src",
         "rm -rf node_modules",
-        "rm backend",  # not recursive: a plain rm leaves a folder alone
-        "cp -r backend copy",  # the source is only read
-        "rsync -a src/ backend/",  # no --delete
         "cat backend/migrations/001_x.sql",
     ):
         assert not _touches(g, fine), fine
@@ -157,8 +154,10 @@ def test_an_operand_with_shell_globs_is_refused_when_it_could_reach_the_path():
     ):
         assert _touches(g, refused), refused
     assert _touches(".env*", "rm .env*") and _touches(".env*", "rm .e*")
-    for fine in ("rm src/*", "rm *.log", "rm backend/other/*", "rm *.py"):
+    # (`rm backend/other/*` is refused too now: it names the literal `backend`.)
+    for fine in ("rm src/*", "rm *.log", "rm *.py"):
         assert not _touches(g, fine), fine
+    for fine in ("rm src/*", "rm *.log", "rm backend/other/*", "rm *.py"):
         assert not _touches(".env*", fine), fine
 
 
@@ -189,7 +188,7 @@ def test_a_relative_glob_is_tried_at_every_folder_of_an_absolute_operand():
     # A wildcard tail could expand to the path, so it is refused too (fail closed).
     assert _touches(g, "rm /Users/x/repo/src/*")
     # An absolute glob is never placed on a relative operand.
-    assert not _touches("/etc/hosts", "rm etc/hosts")
+    assert not _touches("/etc/hosts", "cat etc/hosts")
     assert _touches("/etc/hosts", "rm /etc/hosts")
 
 
@@ -349,7 +348,7 @@ def test_a_recursive_write_onto_a_folder_above_the_working_directory_is_refused(
     assert at("rm -rf /", "/Users/x/repo")
     assert not at("rm -rf /Users/y", "/Users/x/repo")
     assert not at("rm -rf /Users/x/repo2", "/Users/x/repo")
-    assert not at("rm /Users/x", "/Users/x/repo")  # not recursive
+    assert not at("cat /Users/x", "/Users/x/repo")  # only reads
     assert not at("rm -rf /tmp/build", "/Users/x/repo")
 
 
@@ -447,7 +446,7 @@ def test_a_path_limit_is_read_from_the_directory_the_command_runs_in():
     data = served(limit("path", "/etc/hosts", KEY_PATH))
     assert refused(run("rm /etc/hosts", data))
     assert refused(run("rm -rf /etc", data, cwd="/etc/ssh"))
-    assert not refused(run("rm hosts", data))
+    assert not refused(run("cat hosts", data))
 
 
 def test_a_command_the_parser_cannot_read_is_refused_when_a_limit_could_apply():
@@ -620,18 +619,6 @@ def test_the_gemini_manifest_carries_the_same_version():
 G = "backend/migrations/"
 
 
-def test_git_global_options_do_not_hide_a_writing_subcommand():
-    data = served(limit("path", "backend/migrations/", KEY_PATH))
-    for command in ("git -C . rm backend/migrations/001.sql", "git -c a=b rm backend/migrations/001.sql",
-                    "git --no-pager rm backend/migrations/001.sql", "git --git-dir=.git rm backend/migrations/1.sql",
-                    "git -C /tmp -c x=y --no-pager mv backend/migrations/1.sql x", "sudo git -C . rm backend/migrations/1.sql"):
-        assert refused(run(command, data)), command
-    assert not refused(run("git -C . status", data))
-    assert not refused(run("git --no-pager log", data))
-    enforce = load_enforce()
-    assert enforce.strip_prefix_tokens(["git", "-C", "x", "-c", "a=b", "rm", "f"]) == ["git", "rm", "f"]
-
-
 def test_a_relative_operand_is_also_read_from_the_working_directory():
     for command, cwd in (("rm 001_x.sql", "/repo/backend/migrations"), ("rm -rf .", "/repo/backend/migrations"),
                          ("tee out.sql", "/repo/backend/migrations/sub"), ("rm 00*", "/repo/backend/migrations")):
@@ -645,24 +632,31 @@ def test_a_relative_operand_is_also_read_from_the_working_directory():
     assert refused(run("cd backend/migrations && rm 001_x.sql", served(limit("path", G, KEY_PATH)), cwd=os.path.dirname(os.path.dirname(cwd))))
 
 
-def test_more_writers_are_found_and_an_unknown_program_that_names_the_path_is_refused():
-    path = ".env*"
-    for command in ("sed --in-place s/a/b/ .env", "sed --in-place=.bak s/a/b/ .env", "perl --in-place -e 1 .env",
-                    "curl -o .env https://x/y", "curl --output .env https://x/y", "curl --output=.env https://x/y",
-                    "curl -O https://x/.env", "wget -O .env https://x/y", "wget https://x/.env",
-                    "git reset --hard", "git clean -fd", "git stash", "git apply fix.patch", "git restore .env",
-                    "tar -xzf a.tgz", "tar xf a.tar", "unzip a.zip",
-                    "patch -p1", "shred -u .env",
-                    "python3 build.py --out .env", "./script.sh .env", "npm run seed -- .env.local"):
-        assert _touches(path, command), command
-    assert _touches(G, "tar -xf a.tar -C backend") and _touches(G, "unzip a.zip -d backend")
-    assert not _touches(G, "tar -xf a.tar -C other")
-    for command in ("git reset", "git reset HEAD file", "git clean -n", "git clean -fdn", "git apply --check x.patch",
-                    "tar -tf a.tar", "tar -czf out.tgz src", "unzip -l a.zip", "curl https://x/y", "wget -O- https://x/y".replace("-O-", "-q"),
-                    "python3 build.py", "npm test", "cat .env", "git status", "sed s/a/b/ .env"):
-        if command.startswith("wget -q"):
-            continue
-        assert not _touches(path, command), command
+def test_one_rule_a_command_that_names_a_protected_path_is_refused_unless_it_only_reads():
+    data = served(PATH)
+    for command in ("git -C x add .env", "curl -so .env https://x/y", "sed --in-pl s/a/b/ .env",
+                    "/usr/bin/cat .env > x", "/bin/cat .env", "git clean -e .env -fd", "git -c a=b rm .env",
+                    "curl --output=.env https://x/y", "wget -O.env https://x/y", "tar -xf a.tar -C .env.d",
+                    "python3 build.py --out .env", "./script.sh .env", "npm run seed -- .env.local",
+                    "shred -u .env", "git restore .env", "sed -i s/a/b/ app/.env", "less .env", "sort .env",
+                    "rg KEY .env", "git add .", "rm -rf ."):
+        assert refused(run(command, data)), command
+        assert refused(run(command, data, cursor=True)), command
+    for command in ("cat .env", "grep KEY .env", "ls -la .env", "head -n1 .env", "diff .env a", "stat .env",
+                    "wc -l .env", "file .env", "test -f .env", "echo hi",
+                    "git status", "npm test", "python3 build.py", "git clean -n", "curl https://x/y",
+                    "sed s/a/b/ notes.txt", "rm notes.txt"):
+        assert not refused(run(command, data)), command
+    assert not refused(run("git push origin main", served(PATH, principles=False)))
+    # the head must be a bare name: a path is not trusted to be `cat`
+    assert not limits.command_touches_path(".env*", limits.segment_tokens("cat .env"))
+    assert limits.command_touches_path(".env*", limits.segment_tokens("/usr/bin/cat .env"))
+
+
+def test_the_read_only_set_is_inside_the_hooks_read_only_set():
+    enforce = load_enforce()
+    assert limits._READ_ONLY <= set(enforce.READ_ONLY)
+    assert not ({"sort", "uniq", "rg", "tree", "gh", "git", "sed", "perl", "curl", "wget", "tar", "less"} & limits._READ_ONLY)
 
 
 def test_a_redirect_before_a_wrapper_does_not_hide_the_command_and_is_still_checked():

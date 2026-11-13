@@ -331,25 +331,10 @@ def runs_inline_code(head, words):
     return any(w in flags or (head in ("perl", "ruby") and re.match(r"^-[A-Za-z]*e$", w)) for w in words[1:])
 
 
-def strip_git_global_tokens(tokens):
-    """`git -C dir -c a=b --no-pager rm .env` as `git rm .env`: the options before the
-    subcommand are dropped, as with_dirs drops them from the words."""
-    out, i = [tokens[0]], 1
-    while i < len(tokens):
-        w = limits._dequote(tokens[i]) or ""
-        if w in GIT_GLOBAL_WITH_ARG and i + 1 < len(tokens):
-            i += 2
-        elif w in GIT_GLOBAL_FLAGS or re.match(r"^--(git-dir|work-tree|namespace|exec-path)=", w):
-            i += 1
-        else:
-            break
-    return out + tokens[i:]
-
-
 def strip_prefix_tokens(tokens):
     """The raw tokens of one segment with the same prefix dropped that strip_prefix drops
     from its words, so a path limit reads `rm .env` behind `sudo`, `env X=1`, a redirect
-    (`2>/dev/null rm .env`) or `git -C dir`. Redirects and their targets are set aside
+    (`2>/dev/null rm .env`). Redirects and their targets are set aside
     first and kept at the end, where the path check still reads them. A trailing `)` of a
     `( ... )` group is not part of the last word."""
     tokens = list(tokens)
@@ -371,10 +356,7 @@ def strip_prefix_tokens(tokens):
         plain.append(t if d is None else d)
     rest, _ = strip_prefix(plain)
     kept = body[len(body) - len(rest):] if rest else []
-    kept = ([rest[0]] + kept[1:]) if kept else []
-    if kept and kept[0] == "git":
-        kept = strip_git_global_tokens(kept)
-    return kept + redirects
+    return kept + redirects  # the head stays as written: `/usr/bin/cat` is not a bare `cat`
 
 
 def segment_entries(command, issues, depth=0):
@@ -575,8 +557,6 @@ def first_block(command, cwd, data):
 
 CUSTOM_KIND_RE = re.compile(r"^custom:[0-9a-f]{12}$")
 LITERAL_RUN_RE = re.compile(r"[^*?/\s]{2,}")
-HOOK_WRITERS = {"rm", "mv", "cp", "tee", "touch", "chmod", "chown", "truncate", "install", "ln",
-                "unlink", "rsync", "dd", "mkdir", "sed", "perl", "git"}
 
 
 def usable_limits(data):
@@ -639,7 +619,7 @@ def limit_hit(command, cwd, data):
                     tries = (e["before"], e["as_run"], e["words"])
                     hit = any(limits.command_matches(limit["pattern"], w) for w in tries if w)
                 else:
-                    if e["xargs"] and e["words"][0] in HOOK_WRITERS:
+                    if e["xargs"] and e["words"][0] not in limits._READ_ONLY:
                         hit = limit_could_apply(limit, command)  # its operands arrive on stdin
                     else:
                         hit = limits.command_touches_path(limit["pattern"], e["tokens"], cwd=e["where"])
