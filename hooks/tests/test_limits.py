@@ -747,3 +747,30 @@ def test_find_only_reads_unless_it_deletes_executes_or_writes():
         assert refused(run(command, data)), command
     assert not refused(run("find . -name x > out.txt", data))
     assert refused(run("find . -name x > .env", data))
+
+
+def test_git_n_is_a_dry_run_only_for_clean_and_apply_reads_only_without_apply():
+    root = tempfile.mkdtemp()
+
+    def at(command):
+        return limits.command_touches_path(".env*", limits.segment_tokens(command), cwd=root)
+
+    for command in ("git merge -n main", "git pull -n", "git rebase -n main", "git apply --apply --check x.patch",
+                    "git apply --stat --apply x.patch"):
+        assert at(command), command
+    for command in ("git clean -n", "git clean -nfd", "git apply --check x.patch"):
+        assert not at(command), command
+
+
+def test_git_dash_c_is_not_applied_twice_to_the_working_directory():
+    assert limits._delete_operands(["git", "-C", "sub", "clean", "-fdx"]) == ["."]
+    assert limits._delete_operands(["git", "-C", "a", "-C", "b", "reset", "--hard"]) == ["."]
+
+
+def test_wrapper_options_hiding_a_directory_are_found_inside_bundles_and_long_prefixes():
+    data = served(PATH, principles=False)
+    for command in ("env -iC /tmp ls", "env -iS 'rm x'", "sudo -uxD /tmp true", "env --ch=/tmp ls",
+                    "env --split=rm", "sudo --chd=/tmp true"):
+        assert refused(run(command, data)), command
+    for command in ("env -i ls", "sudo -i ls", "env - ls", "sudo -n ls"):
+        assert not refused(run(command, data)), command

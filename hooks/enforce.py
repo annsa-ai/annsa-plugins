@@ -601,6 +601,8 @@ def usable_limits(data):
 
 
 WRAPPER_DIR_OPTIONS = {"env": ("-S", "-C", "--split-string", "--chdir"), "sudo": ("-D", "--chdir")}
+#: The short letters among those, checked inside a bundle (`env -iC dir`, `sudo -uxD`).
+WRAPPER_DIR_LETTERS = {"env": set("SC"), "sudo": set("D")}
 
 
 def wrapper_hides_dir(entry):
@@ -612,9 +614,15 @@ def wrapper_hides_dir(entry):
     for wrapper, options in WRAPPER_DIR_OPTIONS.items():
         if wrapper not in names:
             continue
+        longs = [o for o in options if o.startswith("--")]
         for w in prefix:
-            for o in options:
-                if w == o or w.startswith(o + "=") or (len(o) == 2 and w.startswith(o) and w != o):
+            if w.startswith("--"):
+                name = w.split("=", 1)[0]
+                # getopt takes any unambiguous prefix: `--ch` is --chdir.
+                if len(name) >= 4 and any(o.startswith(name) for o in longs):
+                    return True
+            elif w.startswith("-") and len(w) > 1:
+                if WRAPPER_DIR_LETTERS[wrapper] & set(w[1:]):
                     return True
     return False
 
