@@ -770,7 +770,7 @@ def test_git_dash_c_is_not_applied_twice_to_the_working_directory():
 def test_wrapper_options_hiding_a_directory_are_found_inside_bundles_and_long_prefixes():
     data = served(PATH, principles=False)
     for command in ("env -iC /tmp ls", "env -iS 'rm x'", "sudo -uxD /tmp true", "env --ch=/tmp ls",
-                    "env --split=rm", "sudo --chd=/tmp true"):
+                    "env --split=rm", "sudo --chd=/tmp true", "env --c=/tmp ls", "env --s=rm", "sudo --c=/tmp true"):
         assert refused(run(command, data)), command
     for command in ("env -i ls", "sudo -i ls", "env - ls", "sudo -n ls"):
         assert not refused(run(command, data)), command

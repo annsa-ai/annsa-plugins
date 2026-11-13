@@ -618,8 +618,8 @@ def wrapper_hides_dir(entry):
         for w in prefix:
             if w.startswith("--"):
                 name = w.split("=", 1)[0]
-                # getopt takes any unambiguous prefix: `--ch` is --chdir.
-                if len(name) >= 4 and any(o.startswith(name) for o in longs):
+                # getopt takes any unambiguous prefix: `--c` is already --chdir.
+                if len(name) >= 3 and any(o.startswith(name) for o in longs):
                     return True
             elif w.startswith("-") and len(w) > 1:
                 if WRAPPER_DIR_LETTERS[wrapper] & set(w[1:]):
