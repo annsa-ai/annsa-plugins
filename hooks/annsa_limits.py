@@ -18,7 +18,8 @@ principle_limits.py): a relative operand is also tried against the working direc
 (`cd backend/migrations && rm x`), and ONE rule replaces the list of known writers: a segment
 that names the limit's path, or a literal part of it, anywhere in any word is refused, unless it
 starts with a bare read-only program (cat, ls, head, tail, wc, stat, file, grep, diff, echo, pwd,
-test). It catches mistakes; it is not a sandbox.
+test), or `find` without -delete, -exec, -execdir, -ok, -okdir, -fprint*, -fls. It catches mistakes;
+it is not a sandbox.
 """
 
 from __future__ import annotations
@@ -315,6 +316,24 @@ def segment_tokens(text: str) -> List[str]:
 _READ_ONLY = {"cat", "ls", "head", "tail", "wc", "stat", "file", "grep", "diff", "echo", "pwd", "test", "["}
 
 
+#: find only reads unless it carries one of these.
+_FIND_WRITES = {"-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprint0", "-fprintf", "-fls"}
+
+
+def _only_reads(tokens: Sequence[str]) -> bool:
+    """A bare read-only program, or a `find` with nothing in it that writes or runs a program."""
+    plain = [t for t in tokens if t not in _REDIRECTS and t != ">&"]
+    if not plain:
+        return False
+    head = _dequote(plain[0])
+    if head in _READ_ONLY:
+        return True
+    if head == "find":
+        words = [_dequote(t) for t in plain]
+        return all(w is not None for w in words) and not (_FIND_WRITES & set(words))
+    return False
+
+
 def command_path_targets(tokens: Sequence[str]) -> List[tuple]:
     """(operand, recursive) for each path one command segment could write to. One rule: unless
     the segment starts with a bare read-only program, every word of it (`--out=x` also as `x`)
@@ -343,7 +362,7 @@ def command_path_targets(tokens: Sequence[str]) -> List[tuple]:
                 out.append((target, False))
     if not raw:
         return out
-    if _dequote(raw[0]) in _READ_ONLY:
+    if _only_reads(raw):
         return out
     idx = [
         i for i in range(len(raw)) if i not in skip and raw[i] not in _REDIRECTS and raw[i] != ">&"
@@ -385,7 +404,7 @@ def _names_literal(glob: str, tokens: Sequence[str], original: Optional[Sequence
     """Does a segment that is not a bare read-only program name a literal part of the path
     anywhere (a flag value, `-so.env`, `--out=.env`, a script argument)?"""
     words = [_dequote(t) for t in tokens if t not in _REDIRECTS and t != ">&"]
-    if not words or words[0] is None or words[0] in _READ_ONLY:
+    if not words or words[0] is None or _only_reads(tokens):
         return False
     # The whole segment as written, wrapper options included (`env -C dir`, `sudo -u x`).
     every = [_dequote(t) for t in (original if original is not None else tokens)]
@@ -401,7 +420,9 @@ _SCAN_LIMIT = 5000
 
 
 _GIT_TREE_WRITERS = {"reset", "checkout", "restore", "stash", "apply", "merge", "pull", "rebase", "switch", "clean"}
-_READ_FLAGS = {"-n", "--dry-run", "--check", "--stat", "--numstat", "--summary"}
+#: The only git forms that read: `clean -n` and `apply --check/--stat/...` without --apply.
+#: For merge, pull and rebase `-n` means no stat, not a dry run.
+_APPLY_READS = {"--check", "--stat", "--numstat", "--summary"}
 
 
 def _git_parts(rest: List[str]):
@@ -437,14 +458,12 @@ def _delete_operands(words: Sequence[str]) -> Optional[List[str]]:
         if sub == "stash" and after[:1] in (["list"], ["show"]):
             return None
         short = [f for f in after if f.startswith("-") and not f.startswith("--")]
-        if any(f in _READ_FLAGS for f in after) or (
-            sub == "clean" and any("n" in f[1:] for f in short)
-        ):
+        if sub == "clean" and ("--dry-run" in after or any("n" in f[1:] for f in short)):
             return None
-        where = "."
-        for d in dirs:
-            where = posixpath.join(where, d)
-        return [where]
+        if sub == "apply" and "--apply" not in after and any(f in _APPLY_READS for f in after):
+            return None
+        # The caller's working directory already carries git -C, so it is not applied again.
+        return ["."]
     if head == "find" and "-delete" in rest:
         starts = []
         for x in rest:

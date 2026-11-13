@@ -735,3 +735,15 @@ def test_the_literal_check_reads_the_whole_segment_and_wrappers_that_hide_a_dire
     assert refused(run("sudo -u .env true", data))
     enforce = load_enforce()
     assert enforce.limits._names_literal(".env*", ["true"], ["env", "-u", ".env", "true"])
+
+
+def test_find_only_reads_unless_it_deletes_executes_or_writes():
+    data = served(PATH, principles=False)
+    for command in ("find . -name '*.py'", "find . -name x", "find src -type f", "find . -name .env"):
+        assert not refused(run(command, data)), command
+    for command in ("find . -name .env -delete", "find . -exec rm {} \\;", "find . -execdir rm {} +", "find . -ok rm {} \\;",
+                    "find . -fprint out.txt", "find . -fprint0 out", "find . -fprintf out x", "find . -fls out",
+                    "find $DIR -name x", "rm -rf ."):
+        assert refused(run(command, data)), command
+    assert not refused(run("find . -name x > out.txt", data))
+    assert refused(run("find . -name x > .env", data))
