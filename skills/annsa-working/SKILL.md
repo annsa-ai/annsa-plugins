@@ -2,8 +2,8 @@
 name: annsa-working
 # Generated from backend/scripts/skill_annsa_working.py; do not edit by hand.
 description: "Teaches your agent to work from Annsa: take the next priority, follow the plan, and prove what shipped. Use at the start of any session that reads or writes Annsa, and when a call fails."
-version: 5.28.0
-updated: 2026-11-10
+version: 5.33.0
+updated: 2026-11-14
 ---
 
 # Working with Annsa
@@ -20,6 +20,7 @@ The first reply on a connection carries `who`. Read it before your first write.
 - `who.workspace.name` and `who.workspace.id`: the workspace this call ran in.
 - `who.actor.kind`: `user` is a person's credential, `agent` is yours.
 - Send `label` on every write. It names your seat on the board, and `who.actor.seat` confirms it. Clients on MCP 2026-07-28 keep no session, so a label sent once is not kept for the next call.
+- A helper agent you start labels itself `<terminal label> · <helper>`, for example `ui junkie · verify sweep`. It works the rows its terminal holds with no handoff, the row stays held by the terminal, and its notes and verifies carry the helper's full label. Another credential never gets this.
 - Wrong workspace or environment: stop before any write and say which one you are on.
 - A new or empty workspace: `annsa.ask skill=welcome` first.
 
@@ -39,6 +40,8 @@ The first reply on a connection carries `who`. Read it before your first write.
 `annsa.priorities`, `annsa.spec` and `annsa.ask` only read. **Writes go through five tools**; `annsa.act` is their old single name and still takes every action.
 
 - `annsa.work`: claim, write one section of a spec you hold, note, verify a Done When line, escalate an ask, hand off or unclaim (with `next_action` and `ruled_out`), ship. Unclaiming is not closing: work that will not be done is closed with `close` and a `reason`, only when a person has said to close it. `close` works in one call even with a claim or a PR on the row.
+- A `claim` on a spec with no Problem needs `problem`, one line: `claim problem="When an agent claims a priority with a blank Problem, a person can't see what it is solving."`. Without it the claim is refused with an example. A spec someone wrote whole is claimed only when it is buildable: a UI priority needs a design reference and checked files, and the refusal names what is missing. `annsa.spec` shows `ready_to_build` (`have` of `need`).
+- A `note` takes `lesson_kind`: `gotcha` (a trap), `failure` (what you tried that did not work) or `ruled_out` (an option you set aside). The next agent reads them first, in `picking_up` on `annsa.spec`. No `lesson_kind` is a plain note.
 - `annsa.file`: submit feedback or a finding, or propose a priority (section 4).
 - `annsa.decide`: propose a principle.
 - `annsa.board`: merge (it retires numbers for good), place on a bet, list bets, create a bet (it goes last, with a metric you write), change a bet's `bucket` and `aim_pct`, correct a title, propose a severity. A bet's title, metric, rank and owner stay a person's.
@@ -49,7 +52,8 @@ The first reply on a connection carries `who`. Read it before your first write.
 
 - `decision`: an ask and its answer. Answered means apply it.
 - `authority`: `may_decide` is yours to resolve; `must_come_back` goes to a person.
-- `principles`: the rules that apply to this priority, by id and title. Send `include_principles: true` for their text and answers before you decide anything a title might settle. A settled topic is not asked again.
+- `principles`: the rules that match this priority's area, by id and title; a rule that shares nothing with it is left out. Send `include_principles: true` for their text and answers before you decide anything a title might settle. A settled topic is not asked again.
+- `state_now`: one line on where the work stands. A field with nothing in it is not sent.
 - `direction`: Direction pages by id and title. `include_direction: true` adds the first screens.
 - `claim` returns `principles` the same way. `include_memory: true` on `annsa.spec` or `claim` adds `related_answers` and `learned` (what earlier agents found out): send it before you start on, or ask about, something an earlier agent may have met. `answered` on any reply means a person answered your ask: apply it now. `changed` on any reply means work you hold moved since your last call (edited, parked, merged or taken over): read it again with the call it names before you go on.
 
@@ -77,6 +81,10 @@ Merged is not deployed, deployed is not verified, verified is not confirmed by t
 
 - Check every Done When line against the live system, not the code.
 - Record each with `annsa.work verify spec_id=… done_when_index=N how=… where=…`. `where` must be followable: a test node id, a URL, a thread. Prose is refused.
+- Verify with the result: a screen, a check, a measure or a test. Add `result={kind: screen, source: local|staging|live, url: https://…}` (or `data`: the image as base64, up to 5 MB, for an agent with no shell; Annsa fetches a link itself, from public https addresses only, and takes png, webp or jpeg), `{kind: check, query, output, env}`, `{kind: measure, label, before, after, unit}` or `{kind: test, id}`. A person reads what you found beside the line.
+- Many lines at once: `verify spec_id=… lines=[{done_when_index, how, where, result}, …]`. Each line is recorded on its own, and the reply says which were refused. The one-line form still works.
+- A line you proved in part: `covers=partial gap="what is not proven"`. A line you have not checked yet: `state=pending reason="…" until=YYYY-MM-DD`. Neither counts as verified, and annsa.spec shows each line's `proof.state`: checked, partial, noscreen (a `(proof: screen)` line with no picture), pending, open, left (shipped without proof) or stale.
+- For a line about what a person sees, add `media=true media_type=image/png media_bytes=N`. The reply gives an upload link; send the file with the curl line it shows. Never put the image in the call. PNG or WebP up to 5 MB, MP4 up to 25 MB. A person sees it beside the line in the app only, so check the screenshot shows nothing you would not show them.
 - A line you could not check stays unchecked, and you say so. A line that fails: no `verify`, no `ship`; `note` what you saw with the URL, fix it, and check again after the next deploy.
 - `ship` after the checks, not on merge, with `pr_url` and any `learned`.
 - Releasing to production is a person's decision. Follow the workspace's rule for deploys.
@@ -103,6 +111,6 @@ Merged is not deployed, deployed is not verified, verified is not confirmed by t
 
 ## Changes
 
-- 5.28.0 (2026-11-10): The description is one plain line, so plugin directories show it.
-- 5.27.0 (2026-11-06): `who` comes on a connection's first reply, and after a change; a read after that carries none.
-- 5.26.0 (2026-11-05): annsa.file report tells the Annsa team about a bug, a gap or an idea in Annsa itself: once, then carry on, never with your workspace's own customer data.
+- 5.33.0 (2026-11-14): annsa.work verify takes lines=[...] and a result by kind (screen, check, measure, test); a screenshot can arrive by link or base64; a line can be partial or pending.
+- 5.32.0 (2026-11-14): claim takes problem (one line); note takes lesson_kind (gotcha, failure, ruled_out); annsa.spec shows picking_up and ready_to_build.
+- 5.31.0 (2026-11-14): A priorities row has `title` (its name) and `theme` (its theme), and counts the team apart from customers; an open ask carries its question, options and pick. A spec names only the principles that match, and says `state_now`.
