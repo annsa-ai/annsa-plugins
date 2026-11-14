@@ -2,7 +2,7 @@
 name: annsa-working
 # Generated from backend/scripts/skill_annsa_working.py; do not edit by hand.
 description: "Teaches your agent to work from Annsa: take the next priority, follow the plan, and prove what shipped. Use at the start of any session that reads or writes Annsa, and when a call fails."
-version: 5.33.0
+version: 5.35.0
 updated: 2026-11-14
 ---
 
@@ -43,7 +43,7 @@ The first reply on a connection carries `who`. Read it before your first write.
 - A `claim` on a spec with no Problem needs `problem`, one line: `claim problem="When an agent claims a priority with a blank Problem, a person can't see what it is solving."`. Without it the claim is refused with an example. A spec someone wrote whole is claimed only when it is buildable: a UI priority needs a design reference and checked files, and the refusal names what is missing. `annsa.spec` shows `ready_to_build` (`have` of `need`).
 - A `note` takes `lesson_kind`: `gotcha` (a trap), `failure` (what you tried that did not work) or `ruled_out` (an option you set aside). The next agent reads them first, in `picking_up` on `annsa.spec`. No `lesson_kind` is a plain note.
 - `annsa.file`: submit feedback or a finding, or propose a priority (section 4).
-- `annsa.decide`: propose a principle.
+- `annsa.decide`: propose a principle, or `learn` one lesson (a person can undo it).
 - `annsa.board`: merge (it retires numbers for good), place on a bet, list bets, create a bet (it goes last, with a metric you write), change a bet's `bucket` and `aim_pct`, correct a title, propose a severity. A bet's title, metric, rank and owner stay a person's.
 - `annsa.share`: tells customers. An email cannot be unsent; a wrong one is fixed with a correction.
 - A person's only — an agent credential is refused these: `add_transcript`, `answer`, `approve_findings`, `ask_back`, `assign`, `choose`, `direct`, `dispatch`, `import_direction`, `park`, `retract`, `share`, `sign`. An agent may use these only in part: `bet` (create, list, update), `correct` (detail, ruled_out, title), `direction` (comment, get, list, update), `principle` (list, propose), `view` (create, delete, list, update). An agent's `severity` is a proposal until a person types the P; quote it as proposed.
@@ -53,6 +53,7 @@ The first reply on a connection carries `who`. Read it before your first write.
 - `decision`: an ask and its answer. Answered means apply it.
 - `authority`: `may_decide` is yours to resolve; `must_come_back` goes to a person.
 - `principles`: the rules that match this priority's area, by id and title; a rule that shares nothing with it is left out. Send `include_principles: true` for their text and answers before you decide anything a title might settle. A settled topic is not asked again.
+- `brief`: the few lines of Direction that apply to this priority: its bet, up to seven rules, a guide and the playbook. Read it first.
 - `state_now`: one line on where the work stands. A field with nothing in it is not sent.
 - `direction`: Direction pages by id and title. `include_direction: true` adds the first screens.
 - `claim` returns `principles` the same way. `include_memory: true` on `annsa.spec` or `claim` adds `related_answers` and `learned` (what earlier agents found out): send it before you start on, or ask about, something an earlier agent may have met. `answered` on any reply means a person answered your ask: apply it now. `changed` on any reply means work you hold moved since your last call (edited, parked, merged or taken over): read it again with the call it names before you go on.
@@ -81,7 +82,7 @@ Merged is not deployed, deployed is not verified, verified is not confirmed by t
 
 - Check every Done When line against the live system, not the code.
 - Record each with `annsa.work verify spec_id=… done_when_index=N how=… where=…`. `where` must be followable: a test node id, a URL, a thread. Prose is refused.
-- Verify with the result: a screen, a check, a measure or a test. Add `result={kind: screen, source: local|staging|live, url: https://…}` (or `data`: the image as base64, up to 5 MB, for an agent with no shell; Annsa fetches a link itself, from public https addresses only, and takes png, webp or jpeg), `{kind: check, query, output, env}`, `{kind: measure, label, before, after, unit}` or `{kind: test, id}`. A person reads what you found beside the line.
+- Verify with the result: a screen, a check, a measure or a test. Add `result={kind: screen, source: local|staging|live, url: https://…}` (or `data`: the image as base64, up to 5 MB, for an agent with no shell; Annsa fetches a link itself only from claude.ai, canopy or app.annsa.ai and GitHub's image hosts, and takes png, webp or jpeg; send any other image as data), `{kind: check, query, output, env}`, `{kind: measure, label, before, after, unit}` or `{kind: test, id}`. A person reads what you found beside the line.
 - Many lines at once: `verify spec_id=… lines=[{done_when_index, how, where, result}, …]`. Each line is recorded on its own, and the reply says which were refused. The one-line form still works.
 - A line you proved in part: `covers=partial gap="what is not proven"`. A line you have not checked yet: `state=pending reason="…" until=YYYY-MM-DD`. Neither counts as verified, and annsa.spec shows each line's `proof.state`: checked, partial, noscreen (a `(proof: screen)` line with no picture), pending, open, left (shipped without proof) or stale.
 - For a line about what a person sees, add `media=true media_type=image/png media_bytes=N`. The reply gives an upload link; send the file with the curl line it shows. Never put the image in the call. PNG or WebP up to 5 MB, MP4 up to 25 MB. A person sees it beside the line in the app only, so check the screenshot shows nothing you would not show them.
@@ -111,6 +112,6 @@ Merged is not deployed, deployed is not verified, verified is not confirmed by t
 
 ## Changes
 
-- 5.33.0 (2026-11-14): annsa.work verify takes lines=[...] and a result by kind (screen, check, measure, test); a screenshot can arrive by link or base64; a line can be partial or pending.
-- 5.32.0 (2026-11-14): claim takes problem (one line); note takes lesson_kind (gotcha, failure, ruled_out); annsa.spec shows picking_up and ready_to_build.
-- 5.31.0 (2026-11-14): A priorities row has `title` (its name) and `theme` (its theme), and counts the team apart from customers; an open ask carries its question, options and pick. A spec names only the principles that match, and says `state_now`.
+- 5.35.0 (2026-11-14): A screenshot link is fetched only from claude.ai, canopy, app.annsa.ai and GitHub's image hosts; send any other image as data.
+- 5.34.0 (2026-11-14): annsa.work verify takes lines=[...] and a result by kind (screen, check, measure, test); a screenshot can arrive by link or base64; a line can be partial or pending.
+- 5.33.0 (2026-11-14): claim takes problem (one line); note takes lesson_kind (gotcha, failure, ruled_out); annsa.spec shows picking_up and ready_to_build.
