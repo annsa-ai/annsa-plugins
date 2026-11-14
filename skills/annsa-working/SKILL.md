@@ -2,7 +2,7 @@
 name: annsa-working
 # Generated from backend/scripts/skill_annsa_working.py; do not edit by hand.
 description: "Teaches your agent to work from Annsa: take the next priority, follow the plan, and prove what shipped. Use at the start of any session that reads or writes Annsa, and when a call fails."
-version: 5.35.0
+version: 5.36.0
 updated: 2026-11-14
 ---
 
@@ -82,7 +82,7 @@ Merged is not deployed, deployed is not verified, verified is not confirmed by t
 
 - Check every Done When line against the live system, not the code.
 - Record each with `annsa.work verify spec_id=… done_when_index=N how=… where=…`. `where` must be followable: a test node id, a URL, a thread. Prose is refused.
-- Verify with the result: a screen, a check, a measure or a test. Add `result={kind: screen, source: local|staging|live, url: https://…}` (or `data`: the image as base64, up to 5 MB, for an agent with no shell; Annsa fetches a link itself only from claude.ai, canopy or app.annsa.ai and GitHub's image hosts, and takes png, webp or jpeg; send any other image as data), `{kind: check, query, output, env}`, `{kind: measure, label, before, after, unit}` or `{kind: test, id}`. A person reads what you found beside the line.
+- Verify with the result: a screen, a check, a measure or a test. Add `result={kind: screen, source: local|staging|live, data: <the image as base64>}` (png, webp or jpeg, up to 5 MB; links aren't fetched yet, so send the image itself), `{kind: check, query, output, env}`, `{kind: measure, label, before, after, unit}` or `{kind: test, id}`. A person reads what you found beside the line.
 - Many lines at once: `verify spec_id=… lines=[{done_when_index, how, where, result}, …]`. Each line is recorded on its own, and the reply says which were refused. The one-line form still works.
 - A line you proved in part: `covers=partial gap="what is not proven"`. A line you have not checked yet: `state=pending reason="…" until=YYYY-MM-DD`. Neither counts as verified, and annsa.spec shows each line's `proof.state`: checked, partial, noscreen (a `(proof: screen)` line with no picture), pending, open, left (shipped without proof) or stale.
 - For a line about what a person sees, add `media=true media_type=image/png media_bytes=N`. The reply gives an upload link; send the file with the curl line it shows. Never put the image in the call. PNG or WebP up to 5 MB, MP4 up to 25 MB. A person sees it beside the line in the app only, so check the screenshot shows nothing you would not show them.
@@ -112,6 +112,6 @@ Merged is not deployed, deployed is not verified, verified is not confirmed by t
 
 ## Changes
 
+- 5.36.0 (2026-11-14): Screenshot links aren't fetched yet: a screen result carries the image as data.
 - 5.35.0 (2026-11-14): A screenshot link is fetched only from claude.ai, canopy, app.annsa.ai and GitHub's image hosts; send any other image as data.
 - 5.34.0 (2026-11-14): annsa.work verify takes lines=[...] and a result by kind (screen, check, measure, test); a screenshot can arrive by link or base64; a line can be partial or pending.
-- 5.33.0 (2026-11-14): claim takes problem (one line); note takes lesson_kind (gotcha, failure, ruled_out); annsa.spec shows picking_up and ready_to_build.
