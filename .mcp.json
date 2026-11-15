@@ -2,7 +2,7 @@
   "mcpServers": {
     "annsa": {
       "type": "http",
-      "url": "https://app.annsa.ai/mcp"
+      "url": "https://app.annsa.ai/mcp?ref=plugin"
     }
   }
 }
