@@ -2,8 +2,8 @@
 name: annsa-spec
 # Generated from backend/scripts/skill_annsa_spec.py; do not edit by hand.
 description: "Teaches your agent to write a spec from your customers' feedback, with Done When lines it has to prove. Use when you hold a priority and write its sections."
-version: 1.4.0
-updated: 2026-11-10
+version: 1.9.0
+updated: 2026-11-27
 ---
 
 # Writing a spec
@@ -33,6 +33,15 @@ A title says what becomes true for the customer or builder, in words they would 
 | Answer an ask over MCP: a person who sees the decision in a terminal can give it there | Answer your agent's question from your terminal |
 
 The door nudges when a title carries an engine word or runs past 90 characters; the row lands either way. The same rule shapes the spec: The problem is what the person experiences; What to build opens with the outcome; Files to touch and Done When carry the mechanism.
+
+**Done When names its proof:** end each line with `(proof: test)`, `(proof: staging)`, `(proof: prod)`, `(proof: screen)` for what a person sees, or `(proof: manual)` for a person. `annsa.work verify` records the result of each: a screen, a check, a measure or a test.
+
+**What makes a good Done When line:**
+
+- One outcome per line. A refusal and "nothing changes" is one outcome: one test proves both. Two outcomes a check could pass one at a time are two lines.
+- Provable the day it ships. Anything that needs time to show (ranking, traffic, feedback going quiet) is an experiment, not a Done When line: name its metric and the date you will check it, and it never holds the row in building.
+- If no way exists yet to prove a line, building that check is part of the work, or its own sub-priority when it is big. Say which in What to build.
+- If a line can't be proven at all, ask the person before you build, not after.
 
 **Filing a finding:** Send `severity` (P0–P3) with a one-line `severity_reason` on every finding. A finding ranks by severity first and has no account spread or revenue to fall back on, so one without a severity sits at the bottom of the board. A person's severity always wins.
 
@@ -65,7 +74,7 @@ The door nudges when a section runs past 120 words or reads like AI; the text la
 
 **When**
 
-- [ ] You hold the priority: `annsa.work claim priority_number=N label="<your session>"`. Send `label` on every write; `who.actor.seat` confirms the seat.
+- [ ] You hold the priority: `annsa.work claim priority_number=N label="<your session>" problem="<the Problem in one line>"`. Send `label` on every write; `who.actor.seat` confirms the seat. A spec with no Problem is not claimed without `problem`.
 - [ ] Claim BEFORE you touch code — before the branch, before the first edit. Claiming mints the spec if there is none, so there is nothing to build first; until you claim, the board shows nobody on the work.
 - [ ] You have read the whole spec first: `annsa.spec priority_number=N` — its `evidence`, and `updates` if it carries any.
 - [ ] Read `learned` on claim before you start; it's what earlier agents found out.
@@ -156,7 +165,7 @@ Each update: `id`, `section`, `reason`, `proposed_text`, `previous_text`, `propo
 
 **The call**
 
-- [ ] `annsa.work note text="…"` — what you did, what is next, in your own words.
+- [ ] `annsa.work note text="…"` — what you did, what is next, in your own words. Add `lesson_kind=gotcha|failure|ruled_out` for a trap, a dead end or an option set aside: the next agent reads those first.
 - [ ] `annsa.work unclaim reason="…"` — if you are not finishing.
 - [ ] A reviewer's finding that is NOT a bug? `annsa.work unclaim reason="not a bug: <why>" verdict=false_positive` — your reason becomes a note and a person is asked to dismiss. Never close a finding yourself; a false positive is a claim too.
 - [ ] `annsa.work ship` only after the agreed checks pass.
@@ -169,6 +178,6 @@ Each update: `id`, `section`, `reason`, `proposed_text`, `previous_text`, `propo
 
 ## Changes
 
-- 1.4.0 (2026-11-10): The description is one plain line, so plugin directories show it.
-- 1.3.0 (2026-10-26): Send label on every write; the seat does not stick on its own.
-- 1.2.0 (2026-10-25): The section is Evidence and direction again; signals_and_direction is refused.
+- 1.9.0 (2026-11-27): What makes a good Done When line: one outcome, provable the day it ships, build the check if none exists, ask when a line can't be proven.
+- 1.8.0 (2026-11-17): Form, program and job are custom fields now, not Marketing fields; draft-by is worked out from the publish date.
+- 1.7.0 (2026-11-16): A Marketing piece ships with its live link (published_url), after a person's yes.
