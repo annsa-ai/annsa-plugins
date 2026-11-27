@@ -6,6 +6,14 @@ Annsa gives your agents eight tools: three that read your ranked work, its specs
 
 One `skills/` folder and one MCP config (`.mcp.json`) serve Claude Code, Cursor, Codex and Grok Build. The MCP server is remote (`https://app.annsa.ai/mcp`). You sign in with your browser. There is no API key.
 
+## Skills
+
+- **annsa-working**: take the next priority, follow the plan, and prove what shipped. Read at the start of every session.
+- **annsa-spec**: write a spec from your customers' feedback, with Done When lines your agent has to prove.
+- **annsa-decisions**: when to bring a decision to you, and how to follow your answer.
+
+The versions, and where each comes from, are in `skills/SOURCE.md`.
+
 ## Install
 
 ### Claude Code
@@ -62,6 +70,10 @@ If your client asks for a transport, choose Streamable HTTP. If it only supports
 ## First use
 
 Your agent opens a browser to sign in to Annsa. Then ask: "What should I work on?"
+
+## What's new
+
+- **1.1.0:** Your agent writes Done When lines it can prove the day the work ships: one outcome per line, and anything that needs time to show becomes an experiment with a date. Marketing posts ship with their live link. Your agent can read and set your custom fields, like Form, and ask you to close a finished cycle or bet.
 
 ## Docs
 

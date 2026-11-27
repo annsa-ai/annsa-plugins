@@ -4,8 +4,8 @@ These are copies of Annsa's generated skills, taken from the annsa-ai/Annsa repo
 
 | Skill | Version | sha256 |
 |---|---|---|
-| annsa-working | 5.28.0 | c6bb60d38c8a37a88f21bc8254f9e893b635825de99925764f6e467c51ceafca |
-| annsa-spec | 1.4.0 | b8909d5964c33133ddaf06b88164ea87f98a803c3ae440a77c30732781b85082 |
+| annsa-working | 5.44.0 | 6133224ed79a6c7715395681d52c6f1ce5a654ab58cbcbe317746fd099ba9554 |
+| annsa-spec | 1.9.0 | 3a521e7be0476bb5e3d93408eb78a6b215631f5ad658a7a1f8c784e7eb5a8e40 |
 | annsa-decisions | 1.3.0 | 3c3d5c909776452bbfc9a2c1167970fd029f630049d7d6d9f92746e5c0c3d411 |
 
-Fetched 2026-11-10. Don't edit these by hand; recopy them when a version changes.
+Fetched 2026-11-27. Don't edit these by hand; recopy them when a version changes.
